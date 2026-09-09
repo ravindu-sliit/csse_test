@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.env
+*.env.local
+uploads/*
+!uploads/.gitkeep
+.DS_Store
+
+# Test coverage output
+backend/coverage/
+
+# Assignment submission docs (large binary files)
+docs/assignment 2/
+
+
+# Simulation script
+simulate_history.ps1
