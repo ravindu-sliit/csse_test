@@ -1,0 +1,392 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  CITIZEN
+  VOLUNTEER
+  DMC_OFFICER
+  DMC_DUTY_OFFICER
+  DISTRICT_OFFICER
+  RESCUE_TEAM
+}
+
+enum HazardType {
+  FLOOD
+  LANDSLIDE
+  CYCLONE
+  TSUNAMI
+  DROUGHT
+  LIGHTNING
+  FALLEN_TREE
+  ROAD_BLOCK
+}
+
+enum SeverityLevel {
+  WATCH
+  ADVISORY
+  WARNING
+  EMERGENCY
+}
+
+enum HazardStatus {
+  ACTIVE
+  RESOLVED
+  MONITORING
+}
+
+enum WarningStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+enum ReportStatus {
+  PENDING_VERIFICATION
+  UNDER_REVIEW
+  VERIFIED
+  REJECTED
+}
+
+enum RescueTeamStatus {
+  AVAILABLE
+  DISPATCHED
+  EN_ROUTE
+  ON_MISSION
+  RETURNING
+}
+
+enum ShelterStatus {
+  OPEN
+  FULL
+  CLOSED
+}
+
+enum NotificationChannel {
+  SMS_BLAST
+  PUSH_NOTIFICATION
+  TV_RADIO
+  COASTAL_SIREN
+}
+
+enum TransitStatus {
+  PREPARING
+  IN_TRANSIT
+  DELIVERED
+}
+
+enum MissionCriticality {
+  HIGH
+  MEDIUM
+  ROUTINE
+}
+
+enum ReportExportFormat {
+  PDF
+  EXCEL
+  CSV
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  phoneNumber  String?  @unique
+  passwordHash String
+  role         UserRole
+  district     String?
+  status       String   @default("active")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  citizen          Citizen?
+  issuedWarnings   Warning[]        @relation("IssuedBy")
+  verifiedReports  HazardReport[]   @relation("VerifiedBy")
+  generatedReports DisasterReport[]
+  refreshTokens    RefreshToken[]
+
+  @@map("users")
+}
+
+model Citizen {
+  id       String  @id @default(cuid())
+  userId   String  @unique
+  nic      String? @unique
+  address  String?
+  district String?
+
+  user    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reports HazardReport[]
+
+  @@map("citizens")
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+model Hazard {
+  id          String        @id @default(cuid())
+  type        HazardType
+  description String
+  severity    SeverityLevel
+  location    String
+  district    String
+  riverBasin  String?
+  startTime   DateTime      @default(now())
+  endTime     DateTime?
+  status      HazardStatus  @default(ACTIVE)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  warnings Warning[]
+  reports  HazardReport[]
+
+  @@map("hazards")
+}
+
+model Warning {
+  id               String        @id @default(cuid())
+  warningCode      String        @unique
+  hazardType       HazardType
+  severityLevel    SeverityLevel
+  message          String        @db.VarChar(300)
+  issuedTime       DateTime      @default(now())
+  expiryTime       DateTime?
+  targetDistricts  String[]
+  targetRiverBasin String?
+  status           WarningStatus @default(ACTIVE)
+  issuedById       String
+  hazardId         String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  issuedBy          User               @relation("IssuedBy", fields: [issuedById], references: [id])
+  hazard            Hazard?            @relation(fields: [hazardId], references: [id])
+  broadcastChannels WarningBroadcast[]
+  notificationLogs  NotificationLog[]
+  disasterReports   DisasterReport[]
+
+  @@map("warnings")
+}
+
+model WarningBroadcast {
+  id             String              @id @default(cuid())
+  warningId      String
+  channel        NotificationChannel
+  status         String              @default("pending")
+  estimatedReach Int?
+  confirmedReach Int?
+  failedCount    Int?
+  startedAt      DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime            @default(now())
+
+  warning Warning @relation(fields: [warningId], references: [id], onDelete: Cascade)
+
+  @@map("warning_broadcasts")
+}
+
+model NotificationLog {
+  id             String              @id @default(cuid())
+  warningId      String
+  channel        NotificationChannel
+  recipientCount Int
+  deliveredCount Int                 @default(0)
+  failedCount    Int                 @default(0)
+  sentAt         DateTime            @default(now())
+
+  warning Warning @relation(fields: [warningId], references: [id], onDelete: Cascade)
+
+  @@map("notification_logs")
+}
+
+model HazardReport {
+  id               String         @id @default(cuid())
+  reportCode       String         @unique
+  hazardType       HazardType
+  description      String
+  photoUrls        String[]
+  gpsLatitude      Float
+  gpsLongitude     Float
+  district         String
+  locationLabel    String?
+  status           ReportStatus   @default(PENDING_VERIFICATION)
+  severityEstimate SeverityLevel?
+  rejectionReason  String?
+  submittedAt      DateTime       @default(now())
+  reviewedAt       DateTime?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  citizenId    String
+  verifiedById String?
+  hazardId     String?
+
+  citizen    Citizen   @relation(fields: [citizenId], references: [id])
+  verifiedBy User?     @relation("VerifiedBy", fields: [verifiedById], references: [id])
+  hazard     Hazard?   @relation(fields: [hazardId], references: [id])
+
+  @@map("hazard_reports")
+}
+
+model Shelter {
+  id               String        @id @default(cuid())
+  name             String
+  address          String
+  district         String
+  capacity         Int
+  currentOccupancy Int           @default(0)
+  contactNumber    String?
+  status           ShelterStatus @default(OPEN)
+  amenities        String[]
+  registeredById   String
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  occupancyLogs    ShelterOccupancyLog[]
+  supplyDispatches SupplyDispatch[]
+  disasterReports  DisasterReport[]
+
+  @@map("shelters")
+}
+
+model ShelterOccupancyLog {
+  id            String   @id @default(cuid())
+  shelterId     String
+  previousCount Int
+  newCount      Int
+  updatedById   String
+  updatedAt     DateTime @default(now())
+
+  shelter Shelter @relation(fields: [shelterId], references: [id], onDelete: Cascade)
+
+  @@map("shelter_occupancy_logs")
+}
+
+model RescueTeam {
+  id              String           @id @default(cuid())
+  teamCode        String           @unique
+  teamName        String
+  teamType        String
+  contactNumber   String
+  currentLocation String?
+  district        String
+  status          RescueTeamStatus @default(AVAILABLE)
+  memberCount     Int
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  dispatches      RescueDispatch[]
+  disasterReports DisasterReport[]
+
+  @@map("rescue_teams")
+}
+
+model RescueDispatch {
+  id             String             @id @default(cuid())
+  teamId         String
+  targetDistrict String
+  missionDetails String?
+  criticality    MissionCriticality @default(ROUTINE)
+  gearChecklist  String[]
+  dispatchedById String
+  dispatchedAt   DateTime           @default(now())
+  returnedAt     DateTime?
+  status         String             @default("dispatched")
+
+  team RescueTeam @relation(fields: [teamId], references: [id])
+
+  @@map("rescue_dispatches")
+}
+
+model Organization {
+  id            String   @id @default(cuid())
+  name          String
+  type          String
+  contactNumber String
+  address       String?
+  createdAt     DateTime @default(now())
+
+  supplies ReliefSupply[]
+
+  @@map("organizations")
+}
+
+model ReliefSupply {
+  id             String   @id @default(cuid())
+  name           String
+  category       String
+  quantity       Float
+  unit           String
+  location       String
+  status         String   @default("available")
+  organizationId String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization Organization?  @relation(fields: [organizationId], references: [id])
+  dispatches   SupplyDispatch[]
+
+  @@map("relief_supplies")
+}
+
+model SupplyDispatch {
+  id               String        @id @default(cuid())
+  dispatchCode     String        @unique
+  supplyId         String
+  shelterId        String?
+  destinationLabel String
+  quantity         Float
+  unit             String
+  transitStatus    TransitStatus @default(PREPARING)
+  dispatchedById   String
+  dispatchedAt     DateTime      @default(now())
+  deliveredAt      DateTime?
+  createdAt        DateTime      @default(now())
+
+  supply  ReliefSupply @relation(fields: [supplyId], references: [id])
+  shelter Shelter?     @relation(fields: [shelterId], references: [id])
+
+  @@map("supply_dispatches")
+}
+
+model DisasterReport {
+  id                   String              @id @default(cuid())
+  reportTitle          String
+  disasterType         HazardType
+  district             String
+  period               String
+  generatedAt          DateTime            @default(now())
+  generatedById        String
+  citizensReached      Int?
+  citizensEvacuated    Int?
+  shelterOccupancyPeak Int?
+  resourceDistributed  Float?
+  exportFormat         ReportExportFormat?
+  fileUrl              String?
+  createdAt            DateTime            @default(now())
+  warningId            String?
+  shelterId            String?
+  rescueTeamId         String?
+
+  generatedBy User        @relation(fields: [generatedById], references: [id])
+  warning     Warning?    @relation(fields: [warningId], references: [id])
+  shelter     Shelter?    @relation(fields: [shelterId], references: [id])
+  rescueTeam  RescueTeam? @relation(fields: [rescueTeamId], references: [id])
+
+  @@map("disaster_reports")
+}
