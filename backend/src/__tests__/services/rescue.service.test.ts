@@ -523,3 +523,118 @@ describe('getCoordinationSummary()', () => {
     });
   });
 });
+
+// ─── getMyMissions() ──────────────────────────────────────────────────────────────
+
+describe('getMyMissions()', () => {
+  const USER_ID = 'user-uuid-1';
+
+  const DB_USER = {
+    id: USER_ID,
+    email: 'rt001@dmc.gov.lk',
+    name: 'Team Leader Alpha',
+    district: 'Colombo',
+  };
+
+  const DB_TEAM = {
+    id: 'team-uuid-1',
+    teamCode: 'RT001',
+    teamName: 'Alpha Rescue',
+    district: 'Colombo',
+    status: 'AVAILABLE',
+  };
+
+  const DB_MISSIONS = [
+    {
+      id: 'dispatch-uuid-1',
+      teamId: 'team-uuid-1',
+      targetDistrict: 'Colombo',
+      status: 'completed',
+      dispatchedAt: new Date('2026-09-15T10:00:00Z'),
+    },
+    {
+      id: 'dispatch-uuid-2',
+      teamId: 'team-uuid-1',
+      targetDistrict: 'Gampaha',
+      status: 'EN_ROUTE',
+      dispatchedAt: new Date('2026-09-20T08:00:00Z'),
+    },
+  ];
+
+  beforeEach(() => {
+    resetMockPrisma();
+  });
+
+  it('returns team and missions when user and team are found', async () => {
+    mockPrisma.user.findUnique.mockResolvedValue(DB_USER);
+    mockPrisma.rescueTeam.findFirst.mockResolvedValue(DB_TEAM);
+    mockPrisma.rescueDispatch.findMany.mockResolvedValue(DB_MISSIONS);
+
+    const result = await rescueService.getMyMissions(USER_ID);
+
+    expect(result.team).toEqual(DB_TEAM);
+    expect(result.missions).toEqual(DB_MISSIONS);
+  });
+
+  it('throws NOT_FOUND when user does not exist', async () => {
+    mockPrisma.user.findUnique.mockResolvedValue(null);
+
+    await expect(rescueService.getMyMissions('bad-user-id')).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+      status: 404,
+    });
+  });
+
+  it('does not query rescueTeam when user is not found', async () => {
+    mockPrisma.user.findUnique.mockResolvedValue(null);
+
+    await expect(rescueService.getMyMissions(USER_ID)).rejects.toBeDefined();
+    expect(mockPrisma.rescueTeam.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('returns null team and empty missions when no team is associated with user', async () => {
+    mockPrisma.user.findUnique.mockResolvedValue(DB_USER);
+    mockPrisma.rescueTeam.findFirst.mockResolvedValue(null);
+
+    const result = await rescueService.getMyMissions(USER_ID);
+
+    expect(result).toEqual({ team: null, missions: [] });
+    expect(mockPrisma.rescueDispatch.findMany).not.toHaveBeenCalled();
+  });
+
+  it('queries dispatches ordered by dispatchedAt descending', async () => {
+    mockPrisma.user.findUnique.mockResolvedValue(DB_USER);
+    mockPrisma.rescueTeam.findFirst.mockResolvedValue(DB_TEAM);
+    mockPrisma.rescueDispatch.findMany.mockResolvedValue(DB_MISSIONS);
+
+    await rescueService.getMyMissions(USER_ID);
+
+    expect(mockPrisma.rescueDispatch.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { teamId: DB_TEAM.id },
+        orderBy: { dispatchedAt: 'desc' },
+      }),
+    );
+  });
+
+  it('returns empty missions array when team has no dispatches', async () => {
+    mockPrisma.user.findUnique.mockResolvedValue(DB_USER);
+    mockPrisma.rescueTeam.findFirst.mockResolvedValue(DB_TEAM);
+    mockPrisma.rescueDispatch.findMany.mockResolvedValue([]);
+
+    const result = await rescueService.getMyMissions(USER_ID);
+
+    expect(result.team).toEqual(DB_TEAM);
+    expect(result.missions).toEqual([]);
+  });
+
+  it('looks up user by the provided userId', async () => {
+    mockPrisma.user.findUnique.mockResolvedValue(DB_USER);
+    mockPrisma.rescueTeam.findFirst.mockResolvedValue(DB_TEAM);
+    mockPrisma.rescueDispatch.findMany.mockResolvedValue([]);
+
+    await rescueService.getMyMissions(USER_ID);
+
+    expect(mockPrisma.user.findUnique).toHaveBeenCalledWith({ where: { id: USER_ID } });
+  });
+});

@@ -283,4 +283,96 @@ describe('notification.service', () => {
       expect(calculateTotalReach(['SMS_BLAST', 'SMS_BLAST'])).toBe(16400000);
     });
   });
+
+  // ── district-scoped simulateBroadcast ────────────────────────────────────────
+
+  describe('simulateBroadcast() with targetDistricts', () => {
+    it('scales estimated reach proportionally to target district population', async () => {
+      const channel = 'SMS_BLAST';
+      (mockPrisma.warningBroadcast.create as jest.Mock).mockResolvedValueOnce(
+        buildBroadcastRecord(channel, 100000),
+      );
+      (mockPrisma.notificationLog.create as jest.Mock).mockResolvedValueOnce({});
+
+      await simulateBroadcast(WARNING_ID, [channel], ['Colombo']);
+
+      const data = (mockPrisma.warningBroadcast.create as jest.Mock).mock.calls[0][0].data;
+      // Colombo population / total population * 8_200_000 should be less than full national reach
+      expect(data.estimatedReach).toBeGreaterThan(0);
+      expect(data.estimatedReach).toBeLessThan(SIMULATED_REACH[channel]);
+    });
+
+    it('uses combined population for multiple districts', async () => {
+      const channel = 'TV_RADIO';
+      (mockPrisma.warningBroadcast.create as jest.Mock).mockResolvedValueOnce(
+        buildBroadcastRecord(channel, 500000),
+      );
+      (mockPrisma.notificationLog.create as jest.Mock).mockResolvedValueOnce({});
+
+      await simulateBroadcast(WARNING_ID, [channel], ['Colombo', 'Gampaha']);
+
+      const data = (mockPrisma.warningBroadcast.create as jest.Mock).mock.calls[0][0].data;
+      expect(data.estimatedReach).toBeGreaterThan(0);
+    });
+
+    it('falls back to 0 estimated reach for unknown district', async () => {
+      const channel = 'SMS_BLAST';
+      (mockPrisma.warningBroadcast.create as jest.Mock).mockResolvedValueOnce(
+        buildBroadcastRecord(channel, 0),
+      );
+      (mockPrisma.notificationLog.create as jest.Mock).mockResolvedValueOnce({});
+
+      await simulateBroadcast(WARNING_ID, [channel], ['UnknownDistrict']);
+
+      const data = (mockPrisma.warningBroadcast.create as jest.Mock).mock.calls[0][0].data;
+      expect(data.estimatedReach).toBe(0);
+    });
+
+    it('uses national reach when targetDistricts is empty array', async () => {
+      const channel = 'SMS_BLAST';
+      (mockPrisma.warningBroadcast.create as jest.Mock).mockResolvedValueOnce(
+        buildBroadcastRecord(channel, SIMULATED_REACH[channel]),
+      );
+      (mockPrisma.notificationLog.create as jest.Mock).mockResolvedValueOnce({});
+
+      await simulateBroadcast(WARNING_ID, [channel], []);
+
+      const data = (mockPrisma.warningBroadcast.create as jest.Mock).mock.calls[0][0].data;
+      // Empty array → full national population fraction = 1 → full reach
+      expect(data.estimatedReach).toBe(SIMULATED_REACH[channel]);
+    });
+  });
+
+  // ── district-scoped calculateTotalReach ──────────────────────────────────────
+
+  describe('calculateTotalReach() with targetDistricts', () => {
+    it('returns district-proportional reach for a single district', () => {
+      const result = calculateTotalReach(['SMS_BLAST'], ['Colombo']);
+      expect(result).toBeGreaterThan(0);
+      expect(result).toBeLessThan(SIMULATED_REACH['SMS_BLAST']);
+    });
+
+    it('returns higher reach for more districts', () => {
+      const single = calculateTotalReach(['SMS_BLAST'], ['Colombo']);
+      const multiple = calculateTotalReach(['SMS_BLAST'], ['Colombo', 'Gampaha', 'Kandy']);
+      expect(multiple).toBeGreaterThan(single);
+    });
+
+    it('returns 0 for unknown district', () => {
+      const result = calculateTotalReach(['SMS_BLAST'], ['NonExistentDistrict']);
+      expect(result).toBe(0);
+    });
+
+    it('sums across multiple channels with district scoping', () => {
+      const sms = calculateTotalReach(['SMS_BLAST'], ['Colombo']);
+      const tv = calculateTotalReach(['TV_RADIO'], ['Colombo']);
+      const both = calculateTotalReach(['SMS_BLAST', 'TV_RADIO'], ['Colombo']);
+      expect(both).toBe(sms + tv);
+    });
+
+    it('returns 0 for empty channels with districts', () => {
+      const result = calculateTotalReach([], ['Colombo']);
+      expect(result).toBe(0);
+    });
+  });
 });
