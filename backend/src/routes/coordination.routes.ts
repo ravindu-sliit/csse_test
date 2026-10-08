@@ -6,11 +6,9 @@ import {
   createShelterSchema, geocodeShelterSchema, updateOccupancySchema,
   dispatchTeamSchema, createSupplySchema, createSupplyDispatchSchema, updateTransitStatusSchema
 } from '../schemas/shelter.schema';
-import {
-  createShelter, geocodeShelter, getShelters, getShelter, updateOccupancy, getSheltersSummary,
-  getTeams, dispatchTeam, updateDispatch, getCoordinationSummary,
-  getSupplies, createSupply, getSupplyDispatches, createSupplyDispatch, updateSupplyTransit
-} from '../controllers/shelter.controller';
+import { createShelter, geocodeShelter, getShelters, getShelter, updateOccupancy, deleteShelter, getSheltersSummary } from '../controllers/shelter.controller';
+import { getTeams, dispatchTeam, updateDispatch, getCoordinationSummary } from '../controllers/rescue.controller';
+import { getSupplies, createSupply, getSupplyDispatches, createSupplyDispatch, updateSupplyTransit } from '../controllers/supply.controller';
 
 const router = Router();
 router.use(authenticateToken);
@@ -25,6 +23,7 @@ router.post('/shelters', authorizeRoles(...districtAndDmc), validateRequest(crea
 router.get('/shelters', authorizeRoles(...allUsers), getShelters);
 router.get('/shelters/:id', authorizeRoles(...allUsers), getShelter);
 router.patch('/shelters/:id/occupancy', authorizeRoles(...districtAndDmc), validateRequest(updateOccupancySchema), updateOccupancy);
+router.delete('/shelters/:id', authorizeRoles(...districtAndDmc), deleteShelter);
 
 // Rescue teams
 router.get('/rescue-teams', authorizeRoles(...allOfficers), getTeams);

@@ -168,6 +168,16 @@ export async function updateOccupancy(id: string, newOccupancy: number, officerI
   ]);
 }
 
+/** Deletes an empty shelter. Occupied shelters must be cleared first. */
+export async function deleteShelter(id: string) {
+  const shelter = await prisma.shelter.findUnique({ where: { id } });
+  if (!shelter) throw { code: 'NOT_FOUND', message: 'Shelter not found', status: 404 };
+  if (shelter.currentOccupancy > 0) {
+    throw { code: 'SHELTER_NOT_EMPTY', message: 'Shelter cannot be deleted while people are staying there. Update occupancy to zero first.', status: 409 };
+  }
+  return prisma.shelter.delete({ where: { id } });
+}
+
 /**
  * @description Computes an aggregated summary of all currently active shelters
  * (those with status `OPEN` or `FULL`). Useful for dashboard widgets and

@@ -56,6 +56,10 @@ export async function fetchCoordinationSummary(district?: string) {
   return res.data.data;
 }
 
+export async function deleteShelterApi(id: string) {
+  await apiClient.delete(`/shelters/${id}`);
+}
+
 export async function geocodeShelterApi(address: string, district: string) {
   const res = await apiClient.post<{ success: boolean; data: { latitude: number; longitude: number; displayName: string } | null }>('/shelters/geocode', { address, district });
   return res.data.data;

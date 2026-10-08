@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus } from 'lucide-react';
-import { fetchShelters, fetchSheltersSummary, createShelterApi, updateOccupancyApi } from '@/api/shelters.api';
+import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { fetchShelters, fetchSheltersSummary, createShelterApi, updateOccupancyApi, deleteShelterApi } from '@/api/shelters.api';
 import { StatusBadge } from '@/components/shared/StatusBadge';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
@@ -33,21 +33,47 @@ export function SheltersPage() {
   const [newOccupancy, setNewOccupancy] = useState('');
   const [registerForm, setRegisterForm] = useState({ name: '', address: '', district: '', capacity: '' });
   const [occupancyError, setOccupancyError] = useState('');
+  const [deleteError, setDeleteError] = useState('');
 
   const { data, isLoading } = useQuery({ queryKey: ['shelters'], queryFn: () => fetchShelters() });
   const { data: summary } = useQuery({ queryKey: ['shelters-summary'], queryFn: fetchSheltersSummary });
 
   const createMutation = useMutation({
     mutationFn: createShelterApi,
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['shelters'] }); setShowRegister(false); },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['shelters'] });
+      queryClient.invalidateQueries({ queryKey: ['shelters-summary'] });
+      setShowRegister(false);
+    },
   });
 
   const occupancyMutation = useMutation({
     mutationFn: ({ id, count }: { id: string; count: number }) => updateOccupancyApi(id, count),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['shelters'] }); setUpdatingId(null); setOccupancyError(''); },
+    onSuccess: () => {
+      // Refresh both the shelter rows and aggregate capacity cards.
+      queryClient.invalidateQueries({ queryKey: ['shelters'] });
+      queryClient.invalidateQueries({ queryKey: ['shelters-summary'] });
+      setUpdatingId(null);
+      setNewOccupancy('');
+      setOccupancyError('');
+    },
     onError: (err: unknown) => {
       const msg = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message;
       setOccupancyError(msg || 'Failed to update occupancy');
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteShelterApi,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['shelters'] });
+      queryClient.invalidateQueries({ queryKey: ['shelters-summary'] });
+      queryClient.invalidateQueries({ queryKey: ['coordination-summary'] });
+      setDeleteError('');
+    },
+    onError: (err: unknown) => {
+      const msg = (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message;
+      setDeleteError(msg || 'Failed to delete shelter');
     },
   });
 
@@ -127,11 +153,24 @@ export function SheltersPage() {
                     {updatingId === s.id ? (
                       <div className="flex gap-2 items-center">
                         <input type="number" value={newOccupancy} onChange={e => { setNewOccupancy(e.target.value); setOccupancyError(''); }} className="border rounded px-2 py-1 text-sm w-20" placeholder="Count" />
-                        <button onClick={() => occupancyMutation.mutate({ id: s.id, count: parseInt(newOccupancy) })} className="bg-gray-900 text-white text-xs px-2 py-1 rounded">Save</button>
-                        <button onClick={() => { setUpdatingId(null); setOccupancyError(''); }} className="text-xs text-gray-500">Cancel</button>
+                        <button disabled={occupancyMutation.isPending || newOccupancy === ''} onClick={() => occupancyMutation.mutate({ id: s.id, count: Number(newOccupancy) })} className="bg-gray-900 text-white text-xs font-medium px-3 py-1.5 rounded-md hover:bg-gray-700 disabled:opacity-50">{occupancyMutation.isPending ? 'Saving…' : 'Save'}</button>
+                        <button disabled={occupancyMutation.isPending} onClick={() => { setUpdatingId(null); setOccupancyError(''); }} className="border border-gray-300 text-gray-700 text-xs font-medium px-3 py-1.5 rounded-md hover:bg-gray-50 disabled:opacity-50">Cancel</button>
                       </div>
                     ) : (
-                      <button onClick={() => { setUpdatingId(s.id); setNewOccupancy(String(s.currentOccupancy)); }} className="text-xs text-blue-600 hover:underline">Update Occupancy</button>
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => { setUpdatingId(s.id); setNewOccupancy(String(s.currentOccupancy)); setDeleteError(''); }} className="inline-flex items-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100">
+                          <Pencil className="h-3.5 w-3.5" /> Update Occupancy
+                        </button>
+                        <button
+                          disabled={deleteMutation.isPending}
+                          onClick={() => {
+                            if (window.confirm(`Delete shelter “${s.name}”? This action cannot be undone.`)) deleteMutation.mutate(s.id);
+                          }}
+                          className="inline-flex items-center gap-1.5 rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-100 disabled:opacity-50"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" /> Delete
+                        </button>
+                      </div>
                     )}
                     {updatingId === s.id && occupancyError && <p className="text-red-500 text-xs mt-1">{occupancyError}</p>}
                   </td>
@@ -141,6 +180,7 @@ export function SheltersPage() {
           </table>
         )}
       </div>
+      {deleteError && <p role="alert" className="mt-3 text-sm text-red-600">{deleteError}</p>}
     </div>
   );
 }
