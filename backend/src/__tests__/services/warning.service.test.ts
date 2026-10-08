@@ -20,6 +20,8 @@
  */
 
 // ─── Module mocks (must appear before any import that pulls in the real modules) ──
+// Replacing real Prisma, notification service, and code generator with jest mocks
+// so no database connection or side-effects occur during tests.
 
 jest.mock('../../config/database', () => ({
   prisma: require('../mocks/prisma.mock').mockPrisma,
@@ -42,15 +44,19 @@ import { generateWarningCode } from '../../utils/codeGenerator';
 import * as warningService from '../../services/warning.service';
 
 // ─── Typed mock helpers ───────────────────────────────────────────────────────────
+// Cast jest.fn() mocks to typed MockedFunction so TypeScript allows .mockReturnValue etc.
 
 const mockSimulateBroadcast = simulateBroadcast as jest.MockedFunction<typeof simulateBroadcast>;
 const mockCalculateTotalReach = calculateTotalReach as jest.MockedFunction<typeof calculateTotalReach>;
 const mockGenerateWarningCode = generateWarningCode as jest.MockedFunction<typeof generateWarningCode>;
 
 // ─── Shared fixtures ─────────────────────────────────────────────────────────────
+// Reusable test data shared across multiple test suites.
+// Using realistic Sri Lanka DMC data for meaningful test context.
 
 const OFFICER_ID = 'officer-uuid-1';
 
+/** A valid CreateWarningDto representing a flood warning for Colombo & Gampaha districts */
 const CREATE_WARNING_DTO = {
   hazardType: 'FLOOD' as const,
   severityLevel: 'WARNING' as const,
@@ -62,6 +68,7 @@ const CREATE_WARNING_DTO = {
   expiryTime: '2026-10-17T08:00:00.000Z',
 };
 
+/** The DB record returned after a successful warning.create() call */
 const DB_WARNING = {
   id: 'warning-uuid-1',
   warningCode: 'DMC-2026-F01',
@@ -78,6 +85,7 @@ const DB_WARNING = {
   issuedBy: { id: OFFICER_ID, name: 'Duty Officer' },
 };
 
+/** A broadcast channel record as stored in the DB after simulateBroadcast */
 const BROADCAST_CHANNEL_RECORD = {
   id: 'bc-uuid-1',
   warningId: 'warning-uuid-1',
@@ -88,6 +96,7 @@ const BROADCAST_CHANNEL_RECORD = {
   failedCount: 900000,
 };
 
+/** A notification log record representing delivery metrics per channel */
 const NOTIFICATION_LOG_RECORD = {
   id: 'nl-uuid-1',
   warningId: 'warning-uuid-1',
@@ -98,6 +107,7 @@ const NOTIFICATION_LOG_RECORD = {
 };
 
 // ─── Setup / teardown ────────────────────────────────────────────────────────────
+// Reset all mocks before each test to prevent state leaking between tests.
 
 beforeEach(() => {
   resetMockPrisma();
@@ -106,9 +116,14 @@ beforeEach(() => {
   mockGenerateWarningCode.mockReset();
 });
 
-// ─── createAndBroadcast() ────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════════════════════════
+// createAndBroadcast()
+// Core UC01 function: creates a warning record and triggers multi-channel broadcast.
+// ═════════════════════════════════════════════════════════════════════════════════
 
 describe('createAndBroadcast()', () => {
+
+  // Happy path: all dependencies succeed, warning is created and broadcast fires
   describe('successful creation with broadcast', () => {
     const BROADCAST_RESULTS = [
       { id: 'bc-uuid-1', channel: 'SMS_BLAST', status: 'completed' },
@@ -116,6 +131,7 @@ describe('createAndBroadcast()', () => {
     ];
 
     beforeEach(() => {
+      // Mock count=0 so the first warning gets sequence 1
       mockPrisma.warning.count.mockResolvedValue(0);
       mockGenerateWarningCode.mockReturnValue('DMC-2026-F01');
       mockPrisma.warning.create.mockResolvedValue(DB_WARNING);
@@ -124,14 +140,17 @@ describe('createAndBroadcast()', () => {
     });
 
     it('generates a warning code based on hazardType and sequence', async () => {
+      // The service counts existing warnings to determine the next sequence number.
+      // With count=0, the sequence should be 0+1=1, passed to generateWarningCode.
       await warningService.createAndBroadcast(CREATE_WARNING_DTO, OFFICER_ID);
 
       expect(mockPrisma.warning.count).toHaveBeenCalledTimes(1);
-      // sequence = count + 1 = 1
       expect(mockGenerateWarningCode).toHaveBeenCalledWith('FLOOD', 1);
     });
 
     it('persists the warning with ACTIVE status and correct fields', async () => {
+      // All new warnings must be created with ACTIVE status and preserve the
+      // issuing officer's id, hazard type, severity, and target districts.
       await warningService.createAndBroadcast(CREATE_WARNING_DTO, OFFICER_ID);
 
       expect(mockPrisma.warning.create).toHaveBeenCalledWith(
@@ -149,6 +168,8 @@ describe('createAndBroadcast()', () => {
     });
 
     it('calls simulateBroadcast with the new warning id and channels', async () => {
+      // After persisting, the service must delegate broadcast to notification.service,
+      // passing the new warning's DB id, the requested channels, and target districts.
       await warningService.createAndBroadcast(CREATE_WARNING_DTO, OFFICER_ID);
 
       expect(mockSimulateBroadcast).toHaveBeenCalledWith(
@@ -158,13 +179,20 @@ describe('createAndBroadcast()', () => {
       );
     });
 
-    it('calls calculateTotalReach with the selected channels', async () => {
+    it('calls calculateTotalReach with the selected channels and districts', async () => {
+      // estimatedReach shown to the officer is derived from calculateTotalReach,
+      // which uses district population to give a realistic reach figure.
       await warningService.createAndBroadcast(CREATE_WARNING_DTO, OFFICER_ID);
 
-      expect(mockCalculateTotalReach).toHaveBeenCalledWith(CREATE_WARNING_DTO.broadcastChannels, CREATE_WARNING_DTO.targetDistricts);
+      expect(mockCalculateTotalReach).toHaveBeenCalledWith(
+        CREATE_WARNING_DTO.broadcastChannels,
+        CREATE_WARNING_DTO.targetDistricts,
+      );
     });
 
     it('returns warning, broadcastResults, and estimatedReach', async () => {
+      // The return value bundles all three so the controller can respond with
+      // the full picture in a single API response.
       const result = await warningService.createAndBroadcast(CREATE_WARNING_DTO, OFFICER_ID);
 
       expect(result).toEqual({
@@ -174,14 +202,18 @@ describe('createAndBroadcast()', () => {
       });
     });
 
-    it('uses expiryTime as a Date when provided', async () => {
+    it('converts expiryTime string to a Date object before persisting', async () => {
+      // The DTO carries expiryTime as an ISO string; the service must convert it
+      // to a Date so Prisma stores it as a proper timestamp.
       await warningService.createAndBroadcast(CREATE_WARNING_DTO, OFFICER_ID);
 
       const callArg = mockPrisma.warning.create.mock.calls[0][0];
       expect(callArg.data.expiryTime).toBeInstanceOf(Date);
     });
 
-    it('omits expiryTime when not provided', async () => {
+    it('omits expiryTime when not provided (open-ended warning)', async () => {
+      // Warnings without an expiry remain ACTIVE until manually cancelled.
+      // The field must be absent (undefined) rather than set to null.
       const dtoWithoutExpiry = { ...CREATE_WARNING_DTO, expiryTime: undefined };
       await warningService.createAndBroadcast(dtoWithoutExpiry, OFFICER_ID);
 
@@ -189,7 +221,8 @@ describe('createAndBroadcast()', () => {
       expect(callArg.data.expiryTime).toBeUndefined();
     });
 
-    it('uses incremented sequence when warnings already exist', async () => {
+    it('increments sequence correctly when warnings already exist', async () => {
+      // Edge case: if 5 warnings already exist, the next sequence must be 6.
       mockPrisma.warning.count.mockResolvedValue(5);
       await warningService.createAndBroadcast(CREATE_WARNING_DTO, OFFICER_ID);
 
@@ -197,8 +230,11 @@ describe('createAndBroadcast()', () => {
     });
   });
 
+  // Error path: downstream failures must bubble up to the caller
   describe('error propagation', () => {
-    it('propagates prisma create errors', async () => {
+    it('propagates database errors from warning.create', async () => {
+      // If the DB write fails (e.g. constraint violation), the error must not
+      // be swallowed — the controller must receive it to return a 500 response.
       mockPrisma.warning.count.mockResolvedValue(0);
       mockGenerateWarningCode.mockReturnValue('DMC-2026-F01');
       mockPrisma.warning.create.mockRejectedValue(new Error('DB error'));
@@ -208,7 +244,9 @@ describe('createAndBroadcast()', () => {
       ).rejects.toThrow('DB error');
     });
 
-    it('propagates simulateBroadcast errors', async () => {
+    it('propagates errors thrown by simulateBroadcast', async () => {
+      // Even if the warning is persisted, a broadcast failure must propagate
+      // so the caller is aware the notification did not go out.
       mockPrisma.warning.count.mockResolvedValue(0);
       mockGenerateWarningCode.mockReturnValue('DMC-2026-F01');
       mockPrisma.warning.create.mockResolvedValue(DB_WARNING);
@@ -221,13 +259,19 @@ describe('createAndBroadcast()', () => {
   });
 });
 
-// ─── listWarnings() ───────────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════════════════════════
+// listWarnings()
+// Returns a paginated, filterable list of warnings for the officer dashboard.
+// ═════════════════════════════════════════════════════════════════════════════════
 
 describe('listWarnings()', () => {
   const WARNINGS_LIST = [DB_WARNING];
 
+  // Pagination behaviour
   describe('pagination', () => {
-    it('uses default page=1 and limit=20 when not provided', async () => {
+    it('defaults to page=1, limit=20 when params are omitted', async () => {
+      // Callers that do not supply page/limit must still get a valid result
+      // using sensible defaults (skip=0, take=20).
       mockPrisma.warning.findMany.mockResolvedValue(WARNINGS_LIST);
       mockPrisma.warning.count.mockResolvedValue(1);
 
@@ -238,7 +282,8 @@ describe('listWarnings()', () => {
       );
     });
 
-    it('calculates correct skip for page 2 with limit 10', async () => {
+    it('calculates skip correctly for page 2 with limit 10', async () => {
+      // skip = (page - 1) * limit = (2-1)*10 = 10
       mockPrisma.warning.findMany.mockResolvedValue(WARNINGS_LIST);
       mockPrisma.warning.count.mockResolvedValue(25);
 
@@ -249,7 +294,8 @@ describe('listWarnings()', () => {
       );
     });
 
-    it('returns correct meta with totalPages', async () => {
+    it('returns correct meta with totalPages rounded up', async () => {
+      // 45 records / 20 per page = 2.25 → ceil = 3 pages
       mockPrisma.warning.findMany.mockResolvedValue(WARNINGS_LIST);
       mockPrisma.warning.count.mockResolvedValue(45);
 
@@ -258,7 +304,7 @@ describe('listWarnings()', () => {
       expect(result.meta).toEqual({ total: 45, page: 1, limit: 20, totalPages: 3 });
     });
 
-    it('calculates totalPages=1 when results fit in one page', async () => {
+    it('returns totalPages=1 when all results fit on one page', async () => {
       mockPrisma.warning.findMany.mockResolvedValue(WARNINGS_LIST);
       mockPrisma.warning.count.mockResolvedValue(5);
 
@@ -267,20 +313,22 @@ describe('listWarnings()', () => {
       expect(result.meta.totalPages).toBe(1);
     });
 
-    it('runs findMany and count in parallel', async () => {
+    it('runs findMany and count in parallel via Promise.all', async () => {
+      // Both queries must be initiated in the same tick for performance.
       mockPrisma.warning.findMany.mockResolvedValue([]);
       mockPrisma.warning.count.mockResolvedValue(0);
 
       await warningService.listWarnings({});
 
-      // Both should have been called exactly once (Promise.all)
       expect(mockPrisma.warning.findMany).toHaveBeenCalledTimes(1);
       expect(mockPrisma.warning.count).toHaveBeenCalledTimes(1);
     });
   });
 
+  // Filtering behaviour
   describe('filtering by status', () => {
-    it('uppercases the status filter before querying', async () => {
+    it('normalises status to uppercase before querying', async () => {
+      // Client may send "active" but DB stores "ACTIVE" — service must normalise.
       mockPrisma.warning.findMany.mockResolvedValue(WARNINGS_LIST);
       mockPrisma.warning.count.mockResolvedValue(1);
 
@@ -292,6 +340,7 @@ describe('listWarnings()', () => {
     });
 
     it('omits status from where clause when not provided', async () => {
+      // No status filter = return all statuses (ACTIVE, EXPIRED, CANCELLED)
       mockPrisma.warning.findMany.mockResolvedValue([]);
       mockPrisma.warning.count.mockResolvedValue(0);
 
@@ -303,7 +352,8 @@ describe('listWarnings()', () => {
   });
 
   describe('filtering by district', () => {
-    it('uses Prisma has operator for district filter', async () => {
+    it('uses Prisma array-contains (has) operator for district filter', async () => {
+      // targetDistricts is a string[] column — must use { has: district } not equals.
       mockPrisma.warning.findMany.mockResolvedValue(WARNINGS_LIST);
       mockPrisma.warning.count.mockResolvedValue(1);
 
@@ -318,7 +368,7 @@ describe('listWarnings()', () => {
       );
     });
 
-    it('omits district from where clause when not provided', async () => {
+    it('omits district filter when not provided', async () => {
       mockPrisma.warning.findMany.mockResolvedValue([]);
       mockPrisma.warning.count.mockResolvedValue(0);
 
@@ -330,7 +380,7 @@ describe('listWarnings()', () => {
   });
 
   describe('filtering by hazardType', () => {
-    it('uppercases the hazardType filter before querying', async () => {
+    it('normalises hazardType to uppercase before querying', async () => {
       mockPrisma.warning.findMany.mockResolvedValue(WARNINGS_LIST);
       mockPrisma.warning.count.mockResolvedValue(1);
 
@@ -341,7 +391,7 @@ describe('listWarnings()', () => {
       );
     });
 
-    it('omits hazardType from where clause when not provided', async () => {
+    it('omits hazardType filter when not provided', async () => {
       mockPrisma.warning.findMany.mockResolvedValue([]);
       mockPrisma.warning.count.mockResolvedValue(0);
 
@@ -353,7 +403,8 @@ describe('listWarnings()', () => {
   });
 
   describe('combined filters', () => {
-    it('applies all three filters simultaneously', async () => {
+    it('applies status, district, and hazardType simultaneously', async () => {
+      // All three filters must be combined in a single where clause — not separate queries.
       mockPrisma.warning.findMany.mockResolvedValue(WARNINGS_LIST);
       mockPrisma.warning.count.mockResolvedValue(1);
 
@@ -372,7 +423,7 @@ describe('listWarnings()', () => {
   });
 
   describe('result shape', () => {
-    it('returns warnings array and meta object', async () => {
+    it('returns a warnings array and a meta pagination object', async () => {
       mockPrisma.warning.findMany.mockResolvedValue(WARNINGS_LIST);
       mockPrisma.warning.count.mockResolvedValue(1);
 
@@ -382,7 +433,8 @@ describe('listWarnings()', () => {
       expect(result).toHaveProperty('meta');
     });
 
-    it('returns empty array when no warnings match', async () => {
+    it('returns empty warnings array with zero meta when no records match', async () => {
+      // Edge case: filtering by EXPIRED with no expired warnings should return empty.
       mockPrisma.warning.findMany.mockResolvedValue([]);
       mockPrisma.warning.count.mockResolvedValue(0);
 
@@ -393,7 +445,8 @@ describe('listWarnings()', () => {
       expect(result.meta.totalPages).toBe(0);
     });
 
-    it('orders results by issuedTime descending', async () => {
+    it('orders results by issuedTime descending (most recent first)', async () => {
+      // Officers need the latest warnings at the top of the list.
       mockPrisma.warning.findMany.mockResolvedValue([]);
       mockPrisma.warning.count.mockResolvedValue(0);
 
@@ -406,10 +459,14 @@ describe('listWarnings()', () => {
   });
 });
 
-// ─── getWarningById() ─────────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════════════════════════
+// getWarningById()
+// Fetches a single warning with its broadcast channels and notification logs.
+// ═════════════════════════════════════════════════════════════════════════════════
 
 describe('getWarningById()', () => {
-  it('returns the warning with relations when found', async () => {
+  it('returns the fully hydrated warning when found', async () => {
+    // The warning detail page needs channels and logs — both must be included.
     const fullWarning = {
       ...DB_WARNING,
       broadcastChannels: [BROADCAST_CHANNEL_RECORD],
@@ -425,7 +482,8 @@ describe('getWarningById()', () => {
     );
   });
 
-  it('includes broadcastChannels and notificationLogs in the query', async () => {
+  it('includes broadcastChannels and notificationLogs in the Prisma query', async () => {
+    // Verify the include clause is present so relations are not accidentally omitted.
     mockPrisma.warning.findUnique.mockResolvedValue(null);
 
     await warningService.getWarningById('warning-uuid-1');
@@ -435,7 +493,8 @@ describe('getWarningById()', () => {
     expect(includeArg).toHaveProperty('notificationLogs', true);
   });
 
-  it('returns null when warning does not exist', async () => {
+  it('returns null when no warning matches the id (negative case)', async () => {
+    // The controller checks for null and responds with 404.
     mockPrisma.warning.findUnique.mockResolvedValue(null);
 
     const result = await warningService.getWarningById('non-existent-uuid');
@@ -443,7 +502,7 @@ describe('getWarningById()', () => {
     expect(result).toBeNull();
   });
 
-  it('passes the correct id to prisma', async () => {
+  it('passes the exact id to Prisma without modification', async () => {
     mockPrisma.warning.findUnique.mockResolvedValue(null);
 
     await warningService.getWarningById('specific-id-123');
@@ -454,26 +513,18 @@ describe('getWarningById()', () => {
   });
 });
 
-// ─── getBroadcastStatus() ─────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════════════════════════
+// getBroadcastStatus()
+// Aggregates per-channel delivery metrics for the broadcast status dashboard.
+// ═════════════════════════════════════════════════════════════════════════════════
 
 describe('getBroadcastStatus()', () => {
+  /** Warning fixture with two broadcast channels and matching notification logs */
   const WARNING_WITH_LOGS = {
     ...DB_WARNING,
     broadcastChannels: [
-      {
-        channel: 'SMS_BLAST',
-        status: 'completed',
-        confirmedReach: 7300000,
-        failedCount: 900000,
-        estimatedReach: 8200000,
-      },
-      {
-        channel: 'PUSH_NOTIFICATION',
-        status: 'completed',
-        confirmedReach: 1200000,
-        failedCount: 200000,
-        estimatedReach: 1400000,
-      },
+      { channel: 'SMS_BLAST', status: 'completed', confirmedReach: 7300000, failedCount: 900000, estimatedReach: 8200000 },
+      { channel: 'PUSH_NOTIFICATION', status: 'completed', confirmedReach: 1200000, failedCount: 200000, estimatedReach: 1400000 },
     ],
     notificationLogs: [
       { recipientCount: 8200000, deliveredCount: 7300000, failedCount: 900000 },
@@ -481,7 +532,7 @@ describe('getBroadcastStatus()', () => {
     ],
   };
 
-  it('returns null when warning is not found', async () => {
+  it('returns null when the warning does not exist (negative case)', async () => {
     mockPrisma.warning.findUnique.mockResolvedValue(null);
 
     const result = await warningService.getBroadcastStatus('non-existent-uuid');
@@ -489,18 +540,20 @@ describe('getBroadcastStatus()', () => {
     expect(result).toBeNull();
   });
 
-  it('aggregates total confirmed, failed, and target counts from notification logs', async () => {
+  it('sums confirmed, failed, and target counts across all notification logs', async () => {
+    // Total confirmed = 7,300,000 + 1,200,000 = 8,500,000
+    // Total failed    = 900,000   + 200,000   = 1,100,000
+    // Total target    = 8,200,000 + 1,400,000 = 9,600,000
     mockPrisma.warning.findUnique.mockResolvedValue(WARNING_WITH_LOGS);
 
     const result = await warningService.getBroadcastStatus('warning-uuid-1');
 
-    expect(result).not.toBeNull();
     expect(result!.totalConfirmedDeliveries).toBe(7300000 + 1200000);
     expect(result!.totalFailed).toBe(900000 + 200000);
     expect(result!.totalTargetCitizens).toBe(8200000 + 1400000);
   });
 
-  it('returns correct shape with warningId, warningCode, and status', async () => {
+  it('returns warningId, warningCode, and status in the response', async () => {
     mockPrisma.warning.findUnique.mockResolvedValue(WARNING_WITH_LOGS);
 
     const result = await warningService.getBroadcastStatus('warning-uuid-1');
@@ -512,26 +565,25 @@ describe('getBroadcastStatus()', () => {
     });
   });
 
-  it('calculates progressPercent correctly for each channel', async () => {
+  it('calculates progressPercent correctly per channel', async () => {
+    // SMS_BLAST:        round(7,300,000 / 8,200,000 * 100) = 89%
+    // PUSH_NOTIFICATION: round(1,200,000 / 1,400,000 * 100) = 86%
     mockPrisma.warning.findUnique.mockResolvedValue(WARNING_WITH_LOGS);
 
     const result = await warningService.getBroadcastStatus('warning-uuid-1');
 
-    // SMS_BLAST: 7300000 / 8200000 = ~89%
-    const smsChannel = result!.channels.find((c) => c.channel === 'SMS_BLAST');
-    expect(smsChannel!.progressPercent).toBe(Math.round((7300000 / 8200000) * 100));
+    const sms = result!.channels.find(c => c.channel === 'SMS_BLAST');
+    expect(sms!.progressPercent).toBe(Math.round((7300000 / 8200000) * 100));
 
-    // PUSH_NOTIFICATION: 1200000 / 1400000 = ~86%
-    const pushChannel = result!.channels.find((c) => c.channel === 'PUSH_NOTIFICATION');
-    expect(pushChannel!.progressPercent).toBe(Math.round((1200000 / 1400000) * 100));
+    const push = result!.channels.find(c => c.channel === 'PUSH_NOTIFICATION');
+    expect(push!.progressPercent).toBe(Math.round((1200000 / 1400000) * 100));
   });
 
-  it('returns progressPercent=0 when estimatedReach is 0 or null', async () => {
+  it('returns progressPercent=0 when estimatedReach is zero (edge case)', async () => {
+    // Avoid division-by-zero — should return 0% not NaN or Infinity.
     const warningWithZeroReach = {
       ...WARNING_WITH_LOGS,
-      broadcastChannels: [
-        { channel: 'SMS_BLAST', status: 'pending', confirmedReach: 0, failedCount: 0, estimatedReach: 0 },
-      ],
+      broadcastChannels: [{ channel: 'SMS_BLAST', status: 'pending', confirmedReach: 0, failedCount: 0, estimatedReach: 0 }],
       notificationLogs: [],
     };
     mockPrisma.warning.findUnique.mockResolvedValue(warningWithZeroReach);
@@ -541,13 +593,13 @@ describe('getBroadcastStatus()', () => {
     expect(result!.channels[0].progressPercent).toBe(0);
   });
 
-  it('handles warning with no broadcast channels or logs gracefully', async () => {
+  it('handles a warning with no channels or logs (edge case — returns zeros)', async () => {
+    // A warning that was created but broadcast has not started yet.
     const warningNoData = { ...DB_WARNING, broadcastChannels: [], notificationLogs: [] };
     mockPrisma.warning.findUnique.mockResolvedValue(warningNoData);
 
     const result = await warningService.getBroadcastStatus('warning-uuid-1');
 
-    expect(result).not.toBeNull();
     expect(result!.channels).toHaveLength(0);
     expect(result!.totalConfirmedDeliveries).toBe(0);
     expect(result!.totalFailed).toBe(0);
@@ -555,9 +607,14 @@ describe('getBroadcastStatus()', () => {
   });
 });
 
-// ─── cancelWarning() ─────────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════════════════════════
+// cancelWarning()
+// Transitions a warning to CANCELLED status. Guards against double-cancellation.
+// ═════════════════════════════════════════════════════════════════════════════════
 
 describe('cancelWarning()', () => {
+
+  // Happy path: active warning is successfully cancelled
   describe('successful cancellation', () => {
     const ACTIVE_WARNING = { ...DB_WARNING, status: 'ACTIVE' };
     const CANCELLED_WARNING = { ...DB_WARNING, status: 'CANCELLED' };
@@ -567,7 +624,7 @@ describe('cancelWarning()', () => {
       mockPrisma.warning.update.mockResolvedValue(CANCELLED_WARNING);
     });
 
-    it('updates the warning status to CANCELLED', async () => {
+    it('sets warning status to CANCELLED in the database', async () => {
       await warningService.cancelWarning('warning-uuid-1');
 
       expect(mockPrisma.warning.update).toHaveBeenCalledWith({
@@ -576,21 +633,23 @@ describe('cancelWarning()', () => {
       });
     });
 
-    it('returns the updated warning', async () => {
+    it('returns the updated warning record', async () => {
       const result = await warningService.cancelWarning('warning-uuid-1');
 
       expect(result).toEqual(CANCELLED_WARNING);
     });
 
-    it('accepts an optional reason without error', async () => {
+    it('accepts an optional cancellation reason without throwing', async () => {
+      // The reason parameter is for audit purposes; it must not break the flow.
       await expect(
         warningService.cancelWarning('warning-uuid-1', 'Situation resolved'),
       ).resolves.not.toThrow();
     });
   });
 
+  // Negative: warning not found
   describe('not found', () => {
-    it('throws NOT_FOUND error when warning does not exist', async () => {
+    it('throws NOT_FOUND (404) when the warning does not exist', async () => {
       mockPrisma.warning.findUnique.mockResolvedValue(null);
 
       await expect(warningService.cancelWarning('non-existent-uuid')).rejects.toMatchObject({
@@ -599,7 +658,8 @@ describe('cancelWarning()', () => {
       });
     });
 
-    it('does not call prisma update when warning is not found', async () => {
+    it('does not call prisma.update when warning is not found', async () => {
+      // Guard: the update must never be called if the lookup fails.
       mockPrisma.warning.findUnique.mockResolvedValue(null);
 
       await expect(warningService.cancelWarning('non-existent-uuid')).rejects.toBeDefined();
@@ -607,8 +667,10 @@ describe('cancelWarning()', () => {
     });
   });
 
+  // Negative: already cancelled (conflict)
   describe('already cancelled', () => {
-    it('throws WARNING_ALREADY_CANCELLED error for a cancelled warning', async () => {
+    it('throws WARNING_ALREADY_CANCELLED (409) for a cancelled warning', async () => {
+      // Business rule: you cannot cancel a warning that is already cancelled.
       mockPrisma.warning.findUnique.mockResolvedValue({ ...DB_WARNING, status: 'CANCELLED' });
 
       await expect(warningService.cancelWarning('warning-uuid-1')).rejects.toMatchObject({
@@ -617,7 +679,7 @@ describe('cancelWarning()', () => {
       });
     });
 
-    it('does not call prisma update when warning is already cancelled', async () => {
+    it('does not call prisma.update when warning is already cancelled', async () => {
       mockPrisma.warning.findUnique.mockResolvedValue({ ...DB_WARNING, status: 'CANCELLED' });
 
       await expect(warningService.cancelWarning('warning-uuid-1')).rejects.toBeDefined();
@@ -626,10 +688,14 @@ describe('cancelWarning()', () => {
   });
 });
 
-// ─── escalateWarning() ───────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════════════════════════
+// escalateWarning()
+// Updates the severity level of an existing warning (upgrade or downgrade).
+// ═════════════════════════════════════════════════════════════════════════════════
 
 describe('escalateWarning()', () => {
-  it('updates the severityLevel to the new value', async () => {
+  it('updates severityLevel to the new value', async () => {
+    // Primary use: upgrading WARNING → EMERGENCY when situation worsens.
     const escalatedWarning = { ...DB_WARNING, severityLevel: 'EMERGENCY' };
     mockPrisma.warning.update.mockResolvedValue(escalatedWarning);
 
@@ -641,7 +707,7 @@ describe('escalateWarning()', () => {
     });
   });
 
-  it('returns the updated warning with new severity level', async () => {
+  it('returns the updated warning with the new severity level', async () => {
     const escalatedWarning = { ...DB_WARNING, severityLevel: 'EMERGENCY' };
     mockPrisma.warning.update.mockResolvedValue(escalatedWarning);
 
@@ -650,7 +716,8 @@ describe('escalateWarning()', () => {
     expect(result.severityLevel).toBe('EMERGENCY');
   });
 
-  it('can downgrade severity (e.g., EMERGENCY → WATCH)', async () => {
+  it('also supports downgrading severity (e.g. EMERGENCY → WATCH)', async () => {
+    // If the situation improves, officers can reduce severity — same code path.
     const downgraded = { ...DB_WARNING, severityLevel: 'WATCH' };
     mockPrisma.warning.update.mockResolvedValue(downgraded);
 
@@ -662,17 +729,16 @@ describe('escalateWarning()', () => {
     expect(result.severityLevel).toBe('WATCH');
   });
 
-  it('propagates prisma errors (e.g., record not found)', async () => {
-    mockPrisma.warning.update.mockRejectedValue(
-      new Error('Record to update not found.'),
-    );
+  it('propagates Prisma errors when the warning id does not exist', async () => {
+    // If the record is not found, Prisma throws — the service must not catch it.
+    mockPrisma.warning.update.mockRejectedValue(new Error('Record to update not found.'));
 
     await expect(
       warningService.escalateWarning('non-existent-uuid', 'EMERGENCY'),
     ).rejects.toThrow('Record to update not found.');
   });
 
-  it('passes the correct warning id to prisma', async () => {
+  it('passes the exact warning id to Prisma', async () => {
     const updated = { ...DB_WARNING, severityLevel: 'ADVISORY' };
     mockPrisma.warning.update.mockResolvedValue(updated);
 
@@ -684,9 +750,14 @@ describe('escalateWarning()', () => {
   });
 });
 
-// ─── getDashboardSummary() ────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════════════════════════
+// getDashboardSummary()
+// Fetches four real-time KPI counts for the officer command dashboard.
+// ═════════════════════════════════════════════════════════════════════════════════
 
 describe('getDashboardSummary()', () => {
+
+  // Happy path: all four counts return realistic values
   describe('successful aggregation', () => {
     beforeEach(() => {
       mockPrisma.warning.count.mockResolvedValue(4);
@@ -695,7 +766,7 @@ describe('getDashboardSummary()', () => {
       mockPrisma.rescueTeam.count.mockResolvedValue(3);
     });
 
-    it('returns all four dashboard counts', async () => {
+    it('returns all four KPI counts in a single object', async () => {
       const result = await warningService.getDashboardSummary();
 
       expect(result).toEqual({
@@ -706,15 +777,15 @@ describe('getDashboardSummary()', () => {
       });
     });
 
-    it('queries active warnings with ACTIVE status filter', async () => {
+    it('queries only ACTIVE warnings', async () => {
+      // Only ACTIVE warnings should count — EXPIRED and CANCELLED must be excluded.
       await warningService.getDashboardSummary();
 
-      expect(mockPrisma.warning.count).toHaveBeenCalledWith({
-        where: { status: 'ACTIVE' },
-      });
+      expect(mockPrisma.warning.count).toHaveBeenCalledWith({ where: { status: 'ACTIVE' } });
     });
 
-    it('queries pending hazard reports with PENDING_VERIFICATION or UNDER_REVIEW status', async () => {
+    it('queries reports with PENDING_VERIFICATION or UNDER_REVIEW status', async () => {
+      // Both statuses indicate the officer has unprocessed work in the queue.
       await warningService.getDashboardSummary();
 
       expect(mockPrisma.hazardReport.count).toHaveBeenCalledWith({
@@ -722,7 +793,8 @@ describe('getDashboardSummary()', () => {
       });
     });
 
-    it('queries open shelters with OPEN or FULL status', async () => {
+    it('queries shelters with OPEN or FULL status', async () => {
+      // FULL shelters are still active and relevant to the operational picture.
       await warningService.getDashboardSummary();
 
       expect(mockPrisma.shelter.count).toHaveBeenCalledWith({
@@ -730,7 +802,7 @@ describe('getDashboardSummary()', () => {
       });
     });
 
-    it('queries deployed teams with DISPATCHED, EN_ROUTE, or ON_MISSION status', async () => {
+    it('queries rescue teams with DISPATCHED, EN_ROUTE, or ON_MISSION status', async () => {
       await warningService.getDashboardSummary();
 
       expect(mockPrisma.rescueTeam.count).toHaveBeenCalledWith({
@@ -738,10 +810,11 @@ describe('getDashboardSummary()', () => {
       });
     });
 
-    it('runs all four count queries in parallel (Promise.all)', async () => {
+    it('executes all four count queries in parallel (Promise.all)', async () => {
+      // Parallel execution minimises dashboard load time — each query must be
+      // called exactly once within the same Promise.all batch.
       await warningService.getDashboardSummary();
 
-      // All four counts should be called in the same tick
       expect(mockPrisma.warning.count).toHaveBeenCalledTimes(1);
       expect(mockPrisma.hazardReport.count).toHaveBeenCalledTimes(1);
       expect(mockPrisma.shelter.count).toHaveBeenCalledTimes(1);
@@ -749,8 +822,10 @@ describe('getDashboardSummary()', () => {
     });
   });
 
+  // Edge cases and error handling
   describe('edge cases', () => {
-    it('returns zeros when there are no active entities', async () => {
+    it('returns all zeros when no active entities exist', async () => {
+      // Normal state at system start or after a full stand-down.
       mockPrisma.warning.count.mockResolvedValue(0);
       mockPrisma.hazardReport.count.mockResolvedValue(0);
       mockPrisma.shelter.count.mockResolvedValue(0);
@@ -758,15 +833,11 @@ describe('getDashboardSummary()', () => {
 
       const result = await warningService.getDashboardSummary();
 
-      expect(result).toEqual({
-        activeWarnings: 0,
-        pendingReports: 0,
-        openShelters: 0,
-        deployedTeams: 0,
-      });
+      expect(result).toEqual({ activeWarnings: 0, pendingReports: 0, openShelters: 0, deployedTeams: 0 });
     });
 
-    it('handles large counts without overflow', async () => {
+    it('handles large counts without numeric overflow', async () => {
+      // Stress test: very high counts must pass through unchanged.
       mockPrisma.warning.count.mockResolvedValue(9999);
       mockPrisma.hazardReport.count.mockResolvedValue(9999);
       mockPrisma.shelter.count.mockResolvedValue(9999);
@@ -778,7 +849,9 @@ describe('getDashboardSummary()', () => {
       expect(result.pendingReports).toBe(9999);
     });
 
-    it('propagates database errors', async () => {
+    it('propagates database connection errors to the caller', async () => {
+      // If the DB is unreachable, the error must surface — the dashboard must
+      // not silently return stale zeros.
       mockPrisma.warning.count.mockRejectedValue(new Error('Connection timeout'));
       mockPrisma.hazardReport.count.mockResolvedValue(0);
       mockPrisma.shelter.count.mockResolvedValue(0);
