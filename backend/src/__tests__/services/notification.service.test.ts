@@ -1,3 +1,22 @@
+/**
+ * @file notification.service.test.ts
+ * @description Unit tests for notification.service.ts (UC01 — Broadcast engine)
+ * @author Sooriyaarachchi E A R N (IT23829510)
+ *
+ * Coverage target: >80% statements, branches, functions, and lines.
+ *
+ * Test strategy:
+ *  - Prisma is fully mocked; no real database calls are made.
+ *  - simulateBroadcast: tests single channel, multiple channels, unknown channels,
+ *    empty input, sequential ordering, confirmed+failed=estimated invariant,
+ *    and DB error propagation.
+ *  - calculateTotalReach: tests each known channel individually, all four combined,
+ *    unknown channels (returns 0), mixed known/unknown, and duplicate channels.
+ *
+ * Mocked dependencies:
+ *  - prisma → mockPrisma (see mocks/prisma.mock.ts)
+ */
+
 // ─── Module mocks (must come before any imports of the mocked modules) ──────────
 
 jest.mock('../../config/database', () => ({

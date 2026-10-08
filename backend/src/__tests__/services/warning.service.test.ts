@@ -1,10 +1,22 @@
 /**
- * Unit tests for warning.service.ts
+ * @file warning.service.test.ts
+ * @description Unit tests for warning.service.ts (UC01 — Issue & Broadcast Hazard Warning)
+ * @author Sooriyaarachchi E A R N (IT23829510)
+ *
+ * Coverage target: >80% statements, branches, functions, and lines.
+ *
+ * Test strategy:
+ *  - All external dependencies (Prisma, notification service, code generator)
+ *    are fully mocked so tests run in isolation without a real database.
+ *  - Each describe block targets one exported function.
+ *  - Tests cover: positive (happy path), negative (not found / conflict),
+ *    edge cases (empty arrays, zero values, missing optional fields),
+ *    and error propagation (DB failures, broadcast failures).
  *
  * Mocked dependencies:
- *  - prisma           → mockPrisma (see mocks/prisma.mock.ts)
- *  - notification.service → simulateBroadcast, calculateTotalReach
- *  - utils/codeGenerator  → generateWarningCode
+ *  - prisma                → mockPrisma (see mocks/prisma.mock.ts)
+ *  - notification.service  → simulateBroadcast, calculateTotalReach
+ *  - utils/codeGenerator   → generateWarningCode
  */
 
 // ─── Module mocks (must appear before any import that pulls in the real modules) ──
