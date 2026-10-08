@@ -9,6 +9,10 @@ interface CreateWarningDto {
   message: string;
   broadcastChannels: string[];
   expiryTime?: string;
+  latitude?: number;
+  longitude?: number;
+  locationLabel?: string;
+  sourceReportId?: string;
 }
 
 export async function createWarning(dto: CreateWarningDto) {

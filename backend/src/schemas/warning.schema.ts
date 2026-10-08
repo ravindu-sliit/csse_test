@@ -9,6 +9,10 @@ export const createWarningSchema = z.object({
   broadcastChannels: z.array(z.enum(['SMS_BLAST', 'PUSH_NOTIFICATION', 'TV_RADIO', 'COASTAL_SIREN'])).min(1),
   hazardId: z.string().optional(),
   expiryTime: z.string().datetime().optional(),
+  latitude: z.number().optional(),
+  longitude: z.number().optional(),
+  locationLabel: z.string().optional(),
+  sourceReportId: z.string().optional(),
 });
 
 export const cancelWarningSchema = z.object({

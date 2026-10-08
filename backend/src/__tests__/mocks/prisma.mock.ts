@@ -30,6 +30,7 @@ const user = buildModelMock();
 const citizen = buildModelMock();
 const refreshToken = buildModelMock();
 const warning = buildModelMock();
+const hazard = buildModelMock();
 const hazardReport = buildModelMock();
 const shelter = buildModelMock();
 const shelterOccupancyLog = buildModelMock();
@@ -51,6 +52,7 @@ export const mockPrisma = {
   citizen,
   refreshToken,
   warning,
+  hazard,
   hazardReport,
   shelter,
   shelterOccupancyLog,
@@ -96,7 +98,7 @@ export const mockPrisma = {
  */
 export function resetMockPrisma(): void {
   const allModels = [
-    user, citizen, refreshToken, warning, hazardReport, shelter,
+    user, citizen, refreshToken, warning, hazard, hazardReport, shelter,
     shelterOccupancyLog, rescueTeam, rescueDispatch, reliefSupply,
     supplyDispatch, broadcastChannel, warningBroadcast, notificationLog,
     disasterReport,

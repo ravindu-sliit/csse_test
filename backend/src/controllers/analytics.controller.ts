@@ -34,3 +34,30 @@ export const getReportHistory = asyncHandler(async (req: Request, res: Response)
   const result = await exportService.listReports({ page: req.query.page ? parseInt(req.query.page as string) : 1 });
   return paginatedResponse(res, result.reports, result.meta);
 });
+
+export const getCompletedEvents = asyncHandler(async (_req: Request, res: Response) => {
+  return successResponse(res, await exportService.getCompletedEvents());
+});
+
+export const previewAnalyticsReport = asyncHandler(async (req: Request, res: Response) => {
+  return successResponse(res, await exportService.previewAnalyticsReport(req.body));
+});
+
+export const generateAnalyticsReport = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const { format, ...filters } = req.body;
+  if (format !== 'CSV' && format !== 'PDF') {
+    return res.status(400).json({ success: false, error: { code: 'INVALID_FORMAT', message: 'Format must be CSV or PDF' } });
+  }
+  return successResponse(res, await exportService.generateAnalyticsReport(filters, format, req.user!.id), 'Report generated successfully', 201);
+});
+
+export const downloadAnalyticsReport = asyncHandler(async (req: Request, res: Response) => {
+  const report = await exportService.getReportFile(req.params.id);
+  const filePath = report.filePath;
+  if (!filePath) return res.status(404).json({ success: false, error: { code: 'REPORT_NOT_FOUND', message: 'Report file not found' } });
+  return res.download(filePath, `${report.reportTitle}.${report.exportFormat?.toLowerCase() || 'csv'}`);
+});
+
+export const deleteAnalyticsReport = asyncHandler(async (req: Request, res: Response) => {
+  return successResponse(res, await exportService.deleteAnalyticsReport(req.params.id), 'Report deleted successfully');
+});

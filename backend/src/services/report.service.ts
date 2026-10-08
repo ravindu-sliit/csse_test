@@ -186,13 +186,28 @@ export async function verifyReport(id: string, dto: VerifyReportDto, officerId: 
   if (report.status === ReportStatus.VERIFIED || report.status === ReportStatus.REJECTED) {
     throw { code: 'REPORT_ALREADY_REVIEWED', message: 'This report has already been reviewed', status: 409 };
   }
+  const reviewedAt = new Date();
+  const hazard = await prisma.hazard.create({
+    data: {
+      type: report.hazardType,
+      description: report.description,
+      severity: dto.severityEstimate || 'WATCH',
+      location: report.locationLabel || report.district,
+      district: report.district,
+      startTime: report.submittedAt,
+      endTime: reviewedAt,
+      status: 'RESOLVED',
+    },
+  });
+
   return prisma.hazardReport.update({
     where: { id },
     data: {
       status: ReportStatus.VERIFIED,
       severityEstimate: dto.severityEstimate as any,
       verifiedById: officerId,
-      reviewedAt: new Date(),
+      reviewedAt,
+      hazardId: hazard?.id,
     },
   });
 }

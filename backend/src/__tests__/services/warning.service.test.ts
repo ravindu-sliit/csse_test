@@ -142,13 +142,14 @@ describe('createAndBroadcast()', () => {
       expect(mockSimulateBroadcast).toHaveBeenCalledWith(
         DB_WARNING.id,
         CREATE_WARNING_DTO.broadcastChannels,
+        CREATE_WARNING_DTO.targetDistricts,
       );
     });
 
     it('calls calculateTotalReach with the selected channels', async () => {
       await warningService.createAndBroadcast(CREATE_WARNING_DTO, OFFICER_ID);
 
-      expect(mockCalculateTotalReach).toHaveBeenCalledWith(CREATE_WARNING_DTO.broadcastChannels);
+      expect(mockCalculateTotalReach).toHaveBeenCalledWith(CREATE_WARNING_DTO.broadcastChannels, CREATE_WARNING_DTO.targetDistricts);
     });
 
     it('returns warning, broadcastResults, and estimatedReach', async () => {

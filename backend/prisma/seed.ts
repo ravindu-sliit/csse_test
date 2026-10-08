@@ -51,11 +51,11 @@ async function main() {
 
   // ── SHELTERS ───────────────────────────────────────────────────────
   const shelterData = [
-    { name: 'Ratnapura Central College', address: 'Ratnapura Town', district: 'Ratnapura', capacity: 1200, currentOccupancy: 1050, amenities: ['water', 'electricity', 'medical', 'food'] },
-    { name: 'Kalutara Town Hall', address: 'Kalutara Town', district: 'Kalutara', capacity: 800, currentOccupancy: 800, amenities: ['water', 'electricity'] },
-    { name: 'Galle Bodhi Temple Vihara', address: 'Galle Fort Road', district: 'Galle', capacity: 1500, currentOccupancy: 450, amenities: ['water', 'electricity', 'food'] },
-    { name: 'Matara Rahula Auditorium', address: 'Matara Central', district: 'Matara', capacity: 1000, currentOccupancy: 0, status: ShelterStatus.CLOSED, amenities: ['water', 'electricity'] },
-    { name: 'Rathmalana Maha Vidyalaya', address: 'Rathmalana, Colombo', district: 'Colombo', capacity: 500, currentOccupancy: 320, amenities: ['water', 'electricity', 'medical', 'food'] },
+    { name: 'Ratnapura Central College', address: 'Ratnapura Town', district: 'Ratnapura', latitude: 6.6828, longitude: 80.3992, capacity: 1200, currentOccupancy: 1050, amenities: ['water', 'electricity', 'medical', 'food'] },
+    { name: 'Kalutara Town Hall', address: 'Kalutara Town', district: 'Kalutara', latitude: 6.5854, longitude: 79.9607, capacity: 800, currentOccupancy: 777, amenities: ['water', 'electricity'] },
+    { name: 'Galle Bodhi Temple Vihara', address: 'Galle Fort Road', district: 'Galle', latitude: 6.0329, longitude: 80.2168, capacity: 1500, currentOccupancy: 450, amenities: ['water', 'electricity', 'food'] },
+    { name: 'Matara Rahula Auditorium', address: 'Matara Central', district: 'Matara', latitude: 5.9485, longitude: 80.5353, capacity: 1000, currentOccupancy: 0, status: ShelterStatus.CLOSED, amenities: ['water', 'electricity'] },
+    { name: 'Rathmalana Maha Vidyalaya', address: 'Rathmalana, Colombo', district: 'Colombo', latitude: 6.8211, longitude: 79.8663, capacity: 500, currentOccupancy: 320, amenities: ['water', 'electricity', 'medical', 'food'] },
   ];
 
   for (const s of shelterData) {
@@ -66,6 +66,7 @@ async function main() {
       create: {
         id: `seed-shelter-${s.name.replace(/\s/g, '-').toLowerCase()}`,
         name: s.name, address: s.address, district: s.district,
+        latitude: s.latitude, longitude: s.longitude,
         capacity: s.capacity, currentOccupancy: s.currentOccupancy,
         status, amenities: s.amenities, registeredById: districtOfficer.id,
       },

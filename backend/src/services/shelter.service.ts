@@ -30,6 +30,7 @@ import { ShelterStatus } from '@prisma/client';
 export async function createShelter(dto: {
   name: string; address: string; district: string;
   capacity: number; contactNumber?: string; amenities: string[];
+  latitude?: number; longitude?: number;
 }, officerId: string) {
   return prisma.shelter.create({
     data: { ...dto, registeredById: officerId, status: ShelterStatus.OPEN },

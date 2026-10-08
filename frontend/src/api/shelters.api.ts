@@ -11,7 +11,7 @@ export async function fetchSheltersSummary() {
   return res.data.data;
 }
 
-export async function createShelterApi(dto: { name: string; address: string; district: string; capacity: number; contactNumber?: string; amenities: string[] }) {
+export async function createShelterApi(dto: { name: string; address: string; district: string; capacity: number; contactNumber?: string; amenities: string[]; latitude?: number; longitude?: number }) {
   const res = await apiClient.post<{ success: boolean; data: Shelter }>('/shelters', dto);
   return res.data.data;
 }

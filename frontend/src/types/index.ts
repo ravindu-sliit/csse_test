@@ -30,6 +30,11 @@ export interface Warning {
   targetRiverBasin?: string;
   status: WarningStatus;
   issuedBy?: { id: string; name: string };
+  // GPS location fields
+  latitude?: number;
+  longitude?: number;
+  locationLabel?: string;
+  sourceReportId?: string;
 }
 
 export interface HazardReport {
@@ -61,6 +66,8 @@ export interface Shelter {
   contactNumber?: string;
   status: ShelterStatus;
   amenities: string[];
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface RescueTeam {

@@ -48,6 +48,10 @@ export async function createAndBroadcast(dto: CreateWarningDto, officerId: strin
       issuedById: officerId,
       hazardId: dto.hazardId,
       expiryTime: dto.expiryTime ? new Date(dto.expiryTime) : undefined,
+      latitude: dto.latitude,
+      longitude: dto.longitude,
+      locationLabel: dto.locationLabel,
+      sourceReportId: dto.sourceReportId,
       status: WarningStatus.ACTIVE,
     },
     include: {
@@ -56,8 +60,8 @@ export async function createAndBroadcast(dto: CreateWarningDto, officerId: strin
   });
 
   // Simulate broadcast
-  const broadcastResults = await simulateBroadcast(warning.id, dto.broadcastChannels);
-  const estimatedReach = calculateTotalReach(dto.broadcastChannels);
+  const broadcastResults = await simulateBroadcast(warning.id, dto.broadcastChannels, dto.targetDistricts);
+  const estimatedReach = calculateTotalReach(dto.broadcastChannels, dto.targetDistricts);
 
   return { warning, broadcastResults, estimatedReach };
 }

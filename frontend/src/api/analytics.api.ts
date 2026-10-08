@@ -26,6 +26,46 @@ export async function generateReportApi(dto: { templateId: string; title: string
 }
 
 export async function fetchReportHistory() {
-  const res = await apiClient.get<{ success: boolean; data: { id: string; reportTitle: string; exportFormat: string; generatedAt: string; fileUrl: string }[] }>('/analytics/history');
+  const res = await apiClient.get<{ success: boolean; data: { id: string; reportTitle: string; exportFormat: string; generatedAt: string; fileUrl: string; district: string; hazard?: AnalyticsReportEvent }[] }>('/analytics/reports');
   return res.data.data;
+}
+
+export interface AnalyticsReportFilters {
+  eventId: string;
+  districts: string[];
+  startDate: string;
+  endDate: string;
+  categories: string[];
+}
+
+export interface AnalyticsReportEvent {
+  id: string;
+  description: string;
+  type: string;
+  startTime: string;
+  endTime: string;
+}
+
+export async function fetchCompletedReportEvents() {
+  const res = await apiClient.get<{ success: boolean; data: AnalyticsReportEvent[] }>('/analytics/reports/events');
+  return res.data.data;
+}
+
+export async function previewAnalyticsReport(filters: AnalyticsReportFilters) {
+  const res = await apiClient.post<{ success: boolean; data: any }>('/analytics/reports/preview', filters);
+  return res.data.data;
+}
+
+export async function generateAnalyticsReport(filters: AnalyticsReportFilters, format: 'CSV' | 'PDF') {
+  const res = await apiClient.post<{ success: boolean; data: { reportId: string; fileUrl: string } }>('/analytics/reports/generate', { ...filters, format });
+  return res.data.data;
+}
+
+export async function downloadAnalyticsReport(id: string) {
+  const res = await apiClient.get(`/analytics/reports/${id}/download`, { responseType: 'blob' });
+  return URL.createObjectURL(res.data);
+}
+
+export async function deleteAnalyticsReport(id: string) {
+  await apiClient.delete(`/analytics/reports/${id}`);
 }
