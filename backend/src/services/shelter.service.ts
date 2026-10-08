@@ -8,6 +8,47 @@
 import { prisma } from '../config/database';
 import { ShelterStatus } from '@prisma/client';
 
+type GeocodeResult = { latitude: number; longitude: number; displayName: string } | null;
+const geocodeCache = new Map<string, GeocodeResult>();
+let lastGeocodeAt = 0;
+let geocodeQueue: Promise<void> = Promise.resolve();
+
+/** Looks up one user-submitted shelter address via Nominatim, with caching and a 1 req/sec limit. */
+export async function geocodeShelterAddress(address: string, district: string): Promise<GeocodeResult> {
+  const query = `${address.trim()}, ${district.trim()}, Sri Lanka`;
+  const cacheKey = query.toLocaleLowerCase();
+  if (geocodeCache.has(cacheKey)) return geocodeCache.get(cacheKey)!;
+
+  let releaseQueue!: () => void;
+  const previous = geocodeQueue;
+  geocodeQueue = new Promise<void>((resolve) => { releaseQueue = resolve; });
+  await previous;
+  try {
+    const cached = geocodeCache.get(cacheKey);
+    if (cached !== undefined) return cached;
+
+    const waitMs = Math.max(0, 1000 - (Date.now() - lastGeocodeAt));
+    if (waitMs > 0) await new Promise((resolve) => setTimeout(resolve, waitMs));
+    lastGeocodeAt = Date.now();
+
+    const url = new URL('https://nominatim.openstreetmap.org/search');
+    url.search = new URLSearchParams({ q: query, format: 'jsonv2', limit: '1', countrycodes: 'lk' }).toString();
+    const response = await fetch(url, {
+      headers: { 'User-Agent': `DMC-Sri-Lanka-Disaster-Coordination/1.0${process.env.GEOCODING_CONTACT ? ` (${process.env.GEOCODING_CONTACT})` : ''}` },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!response.ok) throw new Error(`Geocoding service returned ${response.status}`);
+    const results = await response.json() as Array<{ lat: string; lon: string; display_name: string }>;
+    const result = results[0]
+      ? { latitude: Number(results[0].lat), longitude: Number(results[0].lon), displayName: results[0].display_name }
+      : null;
+    geocodeCache.set(cacheKey, result);
+    return result;
+  } finally {
+    releaseQueue();
+  }
+}
+
 /**
  * @description Creates a new emergency shelter record and registers it under the
  * given officer. The shelter is created with an initial status of OPEN and zero
@@ -29,6 +70,7 @@ import { ShelterStatus } from '@prisma/client';
  */
 export async function createShelter(dto: {
   name: string; address: string; district: string;
+  latitude?: number; longitude?: number;
   capacity: number; contactNumber?: string; amenities: string[];
 }, officerId: string) {
   return prisma.shelter.create({

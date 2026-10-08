@@ -1,6 +1,6 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
-import { LayoutDashboard, Bell, FileText, Users, Home, BarChart2, Settings, LogOut, Shield } from 'lucide-react';
+import { LayoutDashboard, Bell, FileText, Users, Home, BarChart2, Settings, LogOut, Shield, Truck, Package } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export function OfficerLayout() {
@@ -18,6 +18,8 @@ export function OfficerLayout() {
     { to: '/officer/reports', icon: FileText, label: 'Reports', roles: ['DMC_OFFICER', 'DMC_DUTY_OFFICER'] },
     { to: '/officer/coordination', icon: Users, label: 'Coordination', roles: ['DISTRICT_OFFICER', 'RESCUE_TEAM'] },
     { to: '/officer/shelters', icon: Home, label: 'Shelters' },
+    { to: '/officer/coordination/rescue', icon: Truck, label: 'Rescue Team', roles: ['DISTRICT_OFFICER'] },
+    { to: '/officer/coordination/supply', icon: Package, label: 'Relief Supply', roles: ['DISTRICT_OFFICER'] },
     { to: '/officer/analytics', icon: BarChart2, label: 'Analytics', roles: ['DMC_OFFICER', 'DMC_DUTY_OFFICER'] },
     { to: '/officer/settings', icon: Settings, label: 'Settings' },
   ];
@@ -45,6 +47,7 @@ export function OfficerLayout() {
             <NavLink
               key={to}
               to={to}
+              end={to === '/officer/coordination'}
               className={({ isActive }) =>
                 cn(
                   'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors',

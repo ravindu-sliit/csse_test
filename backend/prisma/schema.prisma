@@ -248,6 +248,8 @@ model Shelter {
   name             String
   address          String
   district         String
+  latitude         Float?
+  longitude        Float?
   capacity         Int
   currentOccupancy Int           @default(0)
   contactNumber    String?

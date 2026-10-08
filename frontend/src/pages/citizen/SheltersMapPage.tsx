@@ -17,9 +17,9 @@ export function SheltersMapPage() {
 
   const pins = shelters.map(s => ({
     id: s.id,
-    lat: DISTRICT_COORDS[s.district]?.[0] || 7.8731,
-    lng: DISTRICT_COORDS[s.district]?.[1] || 80.7718,
-    label: `${s.name} (${s.currentOccupancy}/${s.capacity})`,
+    lat: s.latitude ?? DISTRICT_COORDS[s.district]?.[0] ?? 7.8731,
+    lng: s.longitude ?? DISTRICT_COORDS[s.district]?.[1] ?? 80.7718,
+    label: `${s.name}${s.latitude == null || s.longitude == null ? ` — ${s.district} (district location)` : ''} (${s.currentOccupancy}/${s.capacity})`,
   }));
 
   return (

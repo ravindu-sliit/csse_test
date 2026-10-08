@@ -4,6 +4,8 @@ export const createShelterSchema = z.object({
   name: z.string().min(3),
   address: z.string().min(5),
   district: z.string().min(1),
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
   capacity: z.number().int().positive(),
   contactNumber: z.string().optional(),
   amenities: z.array(z.string()).default([]),
@@ -44,4 +46,9 @@ export const createSupplyDispatchSchema = z.object({
 
 export const updateTransitStatusSchema = z.object({
   transitStatus: z.enum(['PREPARING', 'IN_TRANSIT', 'DELIVERED']),
+});
+
+export const geocodeShelterSchema = z.object({
+  address: z.string().min(5).max(300),
+  district: z.string().min(1).max(100),
 });

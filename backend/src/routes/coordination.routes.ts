@@ -3,11 +3,11 @@ import { authenticateToken } from '../middleware/authenticateToken';
 import { authorizeRoles } from '../middleware/authorizeRoles';
 import { validateRequest } from '../middleware/validateRequest';
 import {
-  createShelterSchema, updateOccupancySchema,
+  createShelterSchema, geocodeShelterSchema, updateOccupancySchema,
   dispatchTeamSchema, createSupplySchema, createSupplyDispatchSchema, updateTransitStatusSchema
 } from '../schemas/shelter.schema';
 import {
-  createShelter, getShelters, getShelter, updateOccupancy, getSheltersSummary,
+  createShelter, geocodeShelter, getShelters, getShelter, updateOccupancy, getSheltersSummary,
   getTeams, dispatchTeam, updateDispatch, getCoordinationSummary,
   getSupplies, createSupply, getSupplyDispatches, createSupplyDispatch, updateSupplyTransit
 } from '../controllers/shelter.controller';
@@ -20,6 +20,7 @@ const districtAndDmc = ['DMC_OFFICER', 'DISTRICT_OFFICER'];
 
 // Shelters — citizens can read (for finding shelters map page)
 router.get('/shelters/summary', authorizeRoles(...allOfficers), getSheltersSummary);
+router.post('/shelters/geocode', authorizeRoles(...districtAndDmc), validateRequest(geocodeShelterSchema), geocodeShelter);
 router.post('/shelters', authorizeRoles(...districtAndDmc), validateRequest(createShelterSchema), createShelter);
 router.get('/shelters', authorizeRoles(...allUsers), getShelters);
 router.get('/shelters/:id', authorizeRoles(...allUsers), getShelter);

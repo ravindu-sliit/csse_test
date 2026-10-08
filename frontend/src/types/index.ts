@@ -56,6 +56,8 @@ export interface Shelter {
   name: string;
   address: string;
   district: string;
+  latitude?: number | null;
+  longitude?: number | null;
   capacity: number;
   currentOccupancy: number;
   contactNumber?: string;

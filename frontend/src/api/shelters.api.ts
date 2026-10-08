@@ -11,7 +11,7 @@ export async function fetchSheltersSummary() {
   return res.data.data;
 }
 
-export async function createShelterApi(dto: { name: string; address: string; district: string; capacity: number; contactNumber?: string; amenities: string[] }) {
+export async function createShelterApi(dto: { name: string; address: string; district: string; latitude?: number; longitude?: number; capacity: number; contactNumber?: string; amenities: string[] }) {
   const res = await apiClient.post<{ success: boolean; data: Shelter }>('/shelters', dto);
   return res.data.data;
 }
@@ -53,5 +53,10 @@ export async function updateSupplyTransitApi(id: string, transitStatus: string) 
 
 export async function fetchCoordinationSummary(district?: string) {
   const res = await apiClient.get<{ success: boolean; data: { teamsDeployed: number; teamsTotal: number; activeShelters: number; supplyHubsActive: number } }>('/coordination-summary', { params: { district } });
+  return res.data.data;
+}
+
+export async function geocodeShelterApi(address: string, district: string) {
+  const res = await apiClient.post<{ success: boolean; data: { latitude: number; longitude: number; displayName: string } | null }>('/shelters/geocode', { address, district });
   return res.data.data;
 }

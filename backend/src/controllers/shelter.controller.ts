@@ -80,3 +80,8 @@ export const updateSupplyTransit = asyncHandler(async (req: Request, res: Respon
   const dispatch = await supplyService.updateTransitStatus(req.params.id, req.body.transitStatus);
   return successResponse(res, dispatch, 'Transit status updated');
 });
+
+export const geocodeShelter = asyncHandler(async (req: Request, res: Response) => {
+  const result = await shelterService.geocodeShelterAddress(req.body.address, req.body.district);
+  return successResponse(res, result);
+});
