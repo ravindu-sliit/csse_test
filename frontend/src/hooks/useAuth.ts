@@ -1,3 +1,13 @@
+/**
+ * @file useAuth.ts
+ * @description Custom hook providing authentication state and actions to components.
+ *
+ * @solid
+ * - SRP: This hook ONLY exposes auth state and actions. No UI rendering.
+ * - DIP: Components depend on this hook interface, not directly on authStore.
+ *        Allows changing state management library without updating components.
+ */
+
 import { useAuthStore } from '@/stores/authStore';
 import type { UserRole } from '@/types';
 

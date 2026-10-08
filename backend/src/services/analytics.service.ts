@@ -7,6 +7,12 @@
  * are scoped to a configurable rolling time window (e.g. "30d", "7d") and are
  * executed against the shared Prisma client.
  *
+ * @solid
+ * - SRP: This service ONLY handles analytics aggregation and metrics calculation.
+ *        Data persistence is handled by respective domain services.
+ * - OCP: New metric types can be added without modifying existing aggregation logic.
+ * - DIP: Depends on Prisma abstraction for data access.
+ *
  * @module services/analytics
  */
 

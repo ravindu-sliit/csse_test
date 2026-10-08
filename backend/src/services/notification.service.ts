@@ -4,6 +4,13 @@
  * multiple notification channels (SMS, push, TV/radio, coastal sirens).
  * Persists broadcast results and notification logs to the database, and
  * provides utilities for estimating total population reach.
+ *
+ * @solid
+ * - SRP: This service ONLY handles notification/broadcast concerns.
+ *        Warning persistence is handled by warning.service.ts.
+ * - OCP: New notification channels can be added to SIMULATED_REACH without code changes.
+ *        New districts can be added to DISTRICT_POPULATION without algorithm changes.
+ * - DIP: Depends on prisma abstraction, not direct database calls.
  */
 
 import { prisma } from '../config/database';

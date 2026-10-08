@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, Bell, Home, Users } from 'lucide-react';
+import { AlertTriangle, Bell, Home } from 'lucide-react';
 import { fetchDashboardSummary, fetchWarnings } from '@/api/warnings.api';
 import { fetchShelters } from '@/api/shelters.api';
 import { StatCard } from '@/components/shared/StatCard';
@@ -180,9 +180,6 @@ export function DashboardPage() {
               </button>
               <button onClick={() => navigate('/officer/shelters')} className="w-full flex items-center gap-2 text-sm text-left px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-colors">
                 <Home className="w-4 h-4" /> Manage Shelters
-              </button>
-              <button onClick={() => navigate('/officer/coordination')} className="w-full flex items-center gap-2 text-sm text-left px-3 py-2 bg-green-50 hover:bg-green-100 text-green-700 rounded-lg transition-colors">
-                <Users className="w-4 h-4" /> Coordinate Response
               </button>
             </div>
           </div>

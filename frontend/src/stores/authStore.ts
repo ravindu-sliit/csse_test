@@ -1,3 +1,14 @@
+/**
+ * @file authStore.ts
+ * @description Zustand store for authentication state management.
+ *
+ * @solid
+ * - SRP: This store ONLY manages auth state (user, tokens, login/logout actions).
+ *        API calls are in auth.api.ts, UI is in components.
+ * - OCP: New auth methods can be added (setUser, updateProfile) without modifying existing actions.
+ * - DIP: Components use useAuth() hook abstraction, not direct store access.
+ */
+
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { apiClient } from '@/api/client';

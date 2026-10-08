@@ -3,6 +3,13 @@
  * @description Service layer for shelter management operations in the disaster
  * early-warning and emergency coordination system. Handles creation, querying,
  * occupancy tracking, and summary reporting for emergency shelters.
+ *
+ * @solid
+ * - SRP: This service ONLY handles shelter registration and occupancy management.
+ *        Rescue teams and supplies are handled by separate services.
+ * - OCP: New shelter statuses (OPEN, FULL, CLOSED) can be extended via enum.
+ * - LSP: Consistent return types and error structures across all functions.
+ * - ISP: Functions accept minimal required parameters (e.g., updateOccupancy only needs id and count).
  */
 
 import { prisma } from '../config/database';

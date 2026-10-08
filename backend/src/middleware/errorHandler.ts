@@ -1,3 +1,14 @@
+/**
+ * @file errorHandler.ts
+ * @description Global error handling middleware for consistent API error responses.
+ *
+ * @solid
+ * - SRP: This middleware ONLY formats and sends error responses.
+ *        Error throwing is done in services/controllers.
+ * - LSP: Handles all error types (known errors, Prisma errors, unknown errors)
+ *        and transforms them into consistent { success: false, error: {...} } format.
+ * - OCP: New error types can be handled by adding cases without modifying existing logic.
+ */
 import { Request, Response, NextFunction } from 'express';
 
 interface ServiceError {

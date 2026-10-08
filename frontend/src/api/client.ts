@@ -1,3 +1,13 @@
+/**
+ * @file client.ts
+ * @description Axios HTTP client configuration with interceptors for auth and error handling.
+ *
+ * @solid
+ * - SRP: This module ONLY configures the HTTP client. Individual API calls are in separate files.
+ * - OCP: New interceptors (logging, retry) can be added without modifying existing ones.
+ * - DIP: All API modules depend on this abstraction, not raw axios. Allows swapping HTTP library.
+ */
+
 import axios from 'axios';
 
 export const apiClient = axios.create({

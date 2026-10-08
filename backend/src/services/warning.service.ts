@@ -6,6 +6,14 @@
  *
  * All database access goes through the Prisma client configured in `../config/database`.
  * Broadcast side-effects are delegated to `notification.service`.
+ *
+ * @solid
+ * - SRP: This service ONLY handles warning lifecycle (create, list, get, cancel, escalate).
+ *        Broadcast logic is delegated to notification.service.ts.
+ * - OCP: New hazard types can be added to HazardType enum without modifying this service.
+ * - LSP: All errors thrown follow the same { code, message, status } structure.
+ * - ISP: Functions accept focused DTOs (CreateWarningDto, not a generic object).
+ * - DIP: Depends on prisma abstraction from config, not direct @prisma/client import.
  */
 
 import { prisma } from '../config/database';

@@ -6,6 +6,13 @@
  * updating dispatch statuses, and generating coordination summaries for DMC officers.
  * All database interactions are performed via Prisma within transactions where data
  * consistency is required.
+ *
+ * @solid
+ * - SRP: This service ONLY handles rescue team and dispatch operations.
+ *        Shelter and supply logic are in separate services.
+ * - OCP: New team statuses can be added to RescueTeamStatus enum without modifying dispatch logic.
+ * - LSP: All errors follow { code, message, status } contract for consistent error handling.
+ * - DIP: Controllers call this service, not Prisma directly.
  */
 
 import { prisma } from '../config/database';
@@ -177,4 +184,40 @@ export async function getCoordinationSummary(district?: string) {
     prisma.reliefSupply.count({ where: { status: 'available' } }),
   ]);
   return { teamsDeployed, teamsTotal, activeShelters, supplyHubsActive: supplyHubs };
+}
+
+/**
+ * @description Gets all dispatch missions for a specific rescue team based on the team leader's user ID.
+ * First finds the rescue team by matching the team leader's email pattern, then fetches dispatches.
+ *
+ * @param userId - The user ID of the rescue team leader
+ * @returns Array of dispatch records with team info
+ */
+export async function getMyMissions(userId: string) {
+  // Find the rescue team associated with this user
+  // In a real system, there would be a direct relation. For now, we match by district or return all for the user's team
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) throw { code: 'NOT_FOUND', message: 'User not found', status: 404 };
+  
+  // Find team by matching email domain or team code pattern
+  const team = await prisma.rescueTeam.findFirst({
+    where: {
+      OR: [
+        { teamCode: { contains: user.email.split('@')[0].toUpperCase() } },
+        { district: user.district || undefined },
+      ],
+    },
+  });
+  
+  if (!team) {
+    // Return empty if no team found
+    return { team: null, missions: [] };
+  }
+  
+  const missions = await prisma.rescueDispatch.findMany({
+    where: { teamId: team.id },
+    orderBy: { dispatchedAt: 'desc' },
+  });
+  
+  return { team, missions };
 }

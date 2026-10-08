@@ -5,6 +5,13 @@
  * logout, and current-user retrieval. All password storage uses bcrypt; tokens are signed
  * with environment-supplied secrets. Refresh tokens are persisted in the database so they
  * can be explicitly revoked on logout.
+ *
+ * @solid
+ * - SRP: This service ONLY handles authentication concerns (login, register, logout, token refresh).
+ *        User profile management would be in a separate user.service.ts.
+ * - OCP: New authentication methods (OAuth, SSO) can be added without modifying existing password auth.
+ * - LSP: All auth errors follow { code, message, status } contract.
+ * - DIP: Uses bcrypt and jwt abstractions, not direct crypto implementations.
  */
 
 import bcrypt from 'bcryptjs';

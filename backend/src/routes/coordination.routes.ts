@@ -9,7 +9,8 @@ import {
 import {
   createShelter, getShelters, getShelter, updateOccupancy, getSheltersSummary,
   getTeams, dispatchTeam, updateDispatch, getCoordinationSummary,
-  getSupplies, createSupply, getSupplyDispatches, createSupplyDispatch, updateSupplyTransit
+  getSupplies, createSupply, getSupplyDispatches, createSupplyDispatch, updateSupplyTransit,
+  getMyMissions
 } from '../controllers/shelter.controller';
 
 const router = Router();
@@ -27,6 +28,7 @@ router.patch('/shelters/:id/occupancy', authorizeRoles(...districtAndDmc), valid
 
 // Rescue teams
 router.get('/rescue-teams', authorizeRoles(...allOfficers), getTeams);
+router.get('/my-missions', authorizeRoles('RESCUE_TEAM'), getMyMissions);
 router.post('/dispatches', authorizeRoles(...districtAndDmc), validateRequest(dispatchTeamSchema), dispatchTeam);
 router.patch('/dispatches/:id/status', authorizeRoles(...allOfficers), updateDispatch);
 

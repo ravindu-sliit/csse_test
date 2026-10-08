@@ -39,6 +39,10 @@ import { AlertsPage } from '@/pages/citizen/AlertsPage';
 import { SheltersMapPage } from '@/pages/citizen/SheltersMapPage';
 import { ProfilePage } from '@/pages/citizen/ProfilePage';
 
+// UC05 - Rescue team pages
+import { lazy, Suspense } from 'react';
+const MyMissionsPage = lazy(() => import('@/pages/officer/MyMissionsPage').then(m => ({ default: m.MyMissionsPage })));
+
 // Shared components
 import { EmptyState } from '@/components/shared/EmptyState';
 import { ToastContainer } from '@/components/shared/Toast';
@@ -87,6 +91,7 @@ export default function App() {
               <Route path="analytics/timeline" element={<AlertTimelinePage />} />
               <Route path="analytics/report-builder" element={<ReportBuilderPage />} />
               <Route path="settings" element={<EmptyState title="Settings" description="Settings coming soon." icon="⚙️" />} />
+              <Route path="my-missions" element={<Suspense fallback={null}><MyMissionsPage /></Suspense>} />
             </Route>
           </Route>
 

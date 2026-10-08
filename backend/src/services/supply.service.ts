@@ -4,6 +4,13 @@
  * Provides functions for listing, creating, and tracking supplies as well as
  * dispatching them to shelters or destinations. Handles inventory deductions
  * atomically to prevent over-dispatching.
+ *
+ * @solid
+ * - SRP: This service ONLY handles relief supply inventory and dispatch operations.
+ *        Shelter management is in shelter.service.ts.
+ * - OCP: New supply categories can be added without modifying dispatch logic.
+ * - LSP: All supply-related errors follow consistent { code, message, status } structure.
+ * - ISP: Dispatch creation accepts minimal DTO (supplyId, destination, quantity).
  */
 
 import { prisma } from '../config/database';

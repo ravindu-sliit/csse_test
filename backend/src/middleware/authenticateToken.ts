@@ -1,3 +1,14 @@
+/**
+ * @file authenticateToken.ts
+ * @description JWT authentication middleware for protecting API routes.
+ *
+ * @solid
+ * - SRP: This middleware ONLY verifies JWT tokens and attaches user to request.
+ *        Authorization (role checking) is handled by authorizeRoles.ts.
+ * - OCP: Token verification strategy can be extended (e.g., refresh token rotation)
+ *        without modifying the core verification logic.
+ * - DIP: Uses jwt.verify abstraction, not direct crypto operations.
+ */
 import { Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { AuthenticatedRequest } from '../types';

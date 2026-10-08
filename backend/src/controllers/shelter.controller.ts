@@ -80,3 +80,8 @@ export const updateSupplyTransit = asyncHandler(async (req: Request, res: Respon
   const dispatch = await supplyService.updateTransitStatus(req.params.id, req.body.transitStatus);
   return successResponse(res, dispatch, 'Transit status updated');
 });
+
+export const getMyMissions = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const result = await rescueService.getMyMissions(req.user!.id);
+  return successResponse(res, result);
+});

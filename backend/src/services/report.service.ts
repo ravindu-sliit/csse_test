@@ -7,6 +7,13 @@
  * (verification, rejection, and marking under review). All database access
  * goes through the shared Prisma client.
  *
+ * @solid
+ * - SRP: This service ONLY handles hazard report lifecycle (submit, list, verify, reject).
+ *        Warning creation from reports is handled by warning.service.ts.
+ * - OCP: New report statuses can be added to ReportStatus enum without code changes.
+ * - LSP: Consistent error handling and return types across all functions.
+ * - ISP: Verification accepts only required fields (severity, notes), not entire report object.
+ *
  * @module services/report
  */
 
