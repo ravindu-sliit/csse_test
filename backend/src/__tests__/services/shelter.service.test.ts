@@ -1,4 +1,5 @@
 // ─── Module mocks (must come before any imports of the mocked modules) ──────────
+import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 
 jest.mock('../../config/database', () => ({
   prisma: require('../mocks/prisma.mock').mockPrisma,

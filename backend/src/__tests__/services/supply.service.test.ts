@@ -1,4 +1,5 @@
 // ─── Module mocks (must come before any imports of the mocked modules) ──────────
+import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 
 jest.mock('../../config/database', () => ({
   prisma: require('../mocks/prisma.mock').mockPrisma,
@@ -539,7 +540,9 @@ describe('updateTransitStatus()', () => {
 
       await supplyService.updateTransitStatus(DISPATCH_ID, 'DELIVERED');
 
-      const updateCall = (mockPrisma.supplyDispatch.update as jest.Mock).mock.calls[0][0];
+      const updateCall = (mockPrisma.supplyDispatch.update as jest.Mock).mock.calls[0][0] as {
+        data: { deliveredAt?: Date };
+      };
       expect(updateCall.data.deliveredAt).toBeInstanceOf(Date);
     });
 
@@ -550,7 +553,9 @@ describe('updateTransitStatus()', () => {
 
       await supplyService.updateTransitStatus(DISPATCH_ID, 'IN_TRANSIT');
 
-      const updateCall = (mockPrisma.supplyDispatch.update as jest.Mock).mock.calls[0][0];
+      const updateCall = (mockPrisma.supplyDispatch.update as jest.Mock).mock.calls[0][0] as {
+        data: { deliveredAt?: Date };
+      };
       expect(updateCall.data.deliveredAt).toBeUndefined();
     });
 
@@ -560,7 +565,9 @@ describe('updateTransitStatus()', () => {
 
       await supplyService.updateTransitStatus(DISPATCH_ID, 'delivered');
 
-      const updateCall = (mockPrisma.supplyDispatch.update as jest.Mock).mock.calls[0][0];
+      const updateCall = (mockPrisma.supplyDispatch.update as jest.Mock).mock.calls[0][0] as {
+        data: { deliveredAt?: Date };
+      };
       expect(updateCall.data.deliveredAt).toBeInstanceOf(Date);
     });
   });
