@@ -27,5 +27,10 @@ export const uploadMiddleware = multer({
 });
 
 export function getUploadUrl(filename: string): string {
-  return `${process.env.BASE_URL || 'http://localhost:3000'}/uploads/${filename}`;
+  // In production, use full BASE_URL. In development, use relative URL for Vite proxy.
+  if (process.env.NODE_ENV === 'production' && process.env.BASE_URL) {
+    return `${process.env.BASE_URL}/uploads/${filename}`;
+  }
+  // Relative URL works with Vite proxy in development
+  return `/uploads/${filename}`;
 }

@@ -18,8 +18,10 @@ app.use(morgan('dev'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// Static file serving for local uploads
-app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+// Static file serving for local uploads (with CORS for frontend access)
+app.use('/uploads', cors({
+  origin: process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:5173'],
+}), express.static(path.join(process.cwd(), 'uploads')));
 
 // Rate limiting on auth routes
 const authLimiter = rateLimit({

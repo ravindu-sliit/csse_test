@@ -48,7 +48,7 @@ export function DashboardPage() {
 
   const getMapPins = () => {
     if (mapLayer === 'shelters') {
-      // Only show shelters with real GPS coordinates
+      // Only show shelters with real GPS coordinates - GREEN markers
       return shelters
         .filter(s => s.latitude != null && s.longitude != null)
         .map(s => ({
@@ -56,13 +56,14 @@ export function DashboardPage() {
           lat: s.latitude!,
           lng: s.longitude!,
           label: `${s.name} (${s.currentOccupancy}/${s.capacity})`,
+          color: 'green' as const,
         }));
     }
     if (mapLayer === 'teams') {
       // For teams, we'd need team coordinates - for now return empty
       return [];
     }
-    // Default: hazards from active warnings
+    // Default: hazards from active warnings - RED markers
     return activeWarnings.flatMap(w => {
       // If warning has GPS coordinates, show a single pin at that location
       if (w.latitude != null && w.longitude != null) {
@@ -71,6 +72,7 @@ export function DashboardPage() {
           lat: w.latitude,
           lng: w.longitude,
           label: `${w.locationLabel || w.hazardType.replace('_', ' ')} - ${w.severityLevel}`,
+          color: 'red' as const,
         }];
       }
       // Otherwise show pins for each target district
@@ -79,6 +81,7 @@ export function DashboardPage() {
         lat: districtCoords[d]?.[0] || 7.8731,
         lng: districtCoords[d]?.[1] || 80.7718,
         label: `${d} - ${w.hazardType.replace('_', ' ')} (${w.severityLevel})`,
+        color: 'red' as const,
       }));
     });
   };
