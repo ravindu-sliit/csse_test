@@ -7,7 +7,7 @@ import { BROADCAST_CHANNELS, SEVERITY_CONFIG } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 
 export function WarningPreviewPage() {
-  const { state } = useLocation() as { state: { hazardType: string; severityLevel: string; targetDistricts: string[]; targetRiverBasin?: string; message: string; broadcastChannels?: string[] } };
+  const { state } = useLocation() as { state: { hazardType: string; severityLevel: string; targetDistricts: string[]; targetRiverBasin?: string; message: string; broadcastChannels?: string[]; latitude?: number; longitude?: number; locationLabel?: string; sourceReportId?: string } };
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -36,12 +36,16 @@ export function WarningPreviewPage() {
 
   const handleBroadcast = () => {
     mutation.mutate({
-      hazardType: state.hazardType,
-      severityLevel: state.severityLevel,
+      hazardType: state.hazardType.toUpperCase(),
+      severityLevel: state.severityLevel.toUpperCase(),
       targetDistricts: state.targetDistricts,
       targetRiverBasin: state.targetRiverBasin,
       message: state.message,
-      broadcastChannels: selectedChannels,
+      broadcastChannels: selectedChannels.map(ch => ch.toUpperCase()),
+      latitude: state.latitude,
+      longitude: state.longitude,
+      locationLabel: state.locationLabel,
+      ...(state.sourceReportId ? { sourceReportId: state.sourceReportId } : {}),
     });
   };
 

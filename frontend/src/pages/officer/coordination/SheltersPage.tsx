@@ -6,7 +6,7 @@ import { StatusBadge } from '@/components/shared/StatusBadge';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { StatCard } from '@/components/shared/StatCard';
-import { DISTRICTS } from '@/lib/constants';
+import { DISTRICTS, DISTRICT_CENTERS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 import type { Shelter } from '@/types';
 
@@ -31,15 +31,24 @@ export function SheltersPage() {
   const [showRegister, setShowRegister] = useState(false);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [newOccupancy, setNewOccupancy] = useState('');
-  const [registerForm, setRegisterForm] = useState({ name: '', address: '', district: '', capacity: '' });
+  const [registerForm, setRegisterForm] = useState({
+    name: '', address: '', district: '', capacity: '',
+    latitude: '', longitude: '',
+  });
   const [occupancyError, setOccupancyError] = useState('');
+  const [formError, setFormError] = useState('');
 
   const { data, isLoading } = useQuery({ queryKey: ['shelters'], queryFn: () => fetchShelters() });
   const { data: summary } = useQuery({ queryKey: ['shelters-summary'], queryFn: fetchSheltersSummary });
 
   const createMutation = useMutation({
     mutationFn: createShelterApi,
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['shelters'] }); setShowRegister(false); },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['shelters'] });
+      setShowRegister(false);
+      setRegisterForm({ name: '', address: '', district: '', capacity: '', latitude: '', longitude: '' });
+      setFormError('');
+    },
   });
 
   const occupancyMutation = useMutation({
@@ -52,6 +61,51 @@ export function SheltersPage() {
   });
 
   const shelters: Shelter[] = data?.data || [];
+
+  const handleUseDistrictCenter = () => {
+    const center = DISTRICT_CENTERS[registerForm.district];
+    if (!center) return;
+    setRegisterForm(prev => ({
+      ...prev,
+      latitude: String(center.lat),
+      longitude: String(center.lng),
+    }));
+  };
+
+  const handleSubmitRegister = () => {
+    setFormError('');
+
+    // Validate required fields
+    if (!registerForm.name.trim()) {
+      setFormError('Shelter name is required');
+      return;
+    }
+    if (!registerForm.address.trim()) {
+      setFormError('Address is required');
+      return;
+    }
+    if (!registerForm.district) {
+      setFormError('District is required');
+      return;
+    }
+    const capacityNum = parseInt(registerForm.capacity);
+    if (!registerForm.capacity || isNaN(capacityNum) || capacityNum <= 0) {
+      setFormError('Capacity must be a positive number');
+      return;
+    }
+
+    const lat = registerForm.latitude ? parseFloat(registerForm.latitude) : undefined;
+    const lng = registerForm.longitude ? parseFloat(registerForm.longitude) : undefined;
+    createMutation.mutate({
+      name: registerForm.name.trim(),
+      address: registerForm.address.trim(),
+      district: registerForm.district,
+      capacity: capacityNum,
+      amenities: [],
+      latitude: lat !== undefined && !isNaN(lat) ? lat : undefined,
+      longitude: lng !== undefined && !isNaN(lng) ? lng : undefined,
+    });
+  };
 
   return (
     <div className="p-6">
@@ -77,27 +131,104 @@ export function SheltersPage() {
         <div className="bg-white border rounded-xl p-5 mb-6">
           <h2 className="font-semibold mb-4">Register Emergency Shelter</h2>
           <div className="grid grid-cols-2 gap-4">
+            {formError && (
+              <div className="col-span-2 bg-red-50 border border-red-200 text-red-600 px-3 py-2 rounded-lg text-sm">
+                {formError}
+              </div>
+            )}
             {[{ key: 'name', label: 'Shelter Name', placeholder: 'e.g. Colombo Town Hall' },
               { key: 'address', label: 'Location / Address', placeholder: 'Full address' }].map(f => (
               <div key={f.key}>
                 <label className="text-sm font-medium text-gray-700 mb-1 block">{f.label}</label>
-                <input value={registerForm[f.key as keyof typeof registerForm]} onChange={e => setRegisterForm(prev => ({ ...prev, [f.key]: e.target.value }))} placeholder={f.placeholder} className="w-full border rounded-lg px-3 py-2 text-sm" />
+                <input
+                  value={registerForm[f.key as keyof typeof registerForm]}
+                  onChange={e => setRegisterForm(prev => ({ ...prev, [f.key]: e.target.value }))}
+                  placeholder={f.placeholder}
+                  className="w-full border rounded-lg px-3 py-2 text-sm"
+                />
               </div>
             ))}
             <div>
               <label className="text-sm font-medium text-gray-700 mb-1 block">District</label>
-              <select value={registerForm.district} onChange={e => setRegisterForm(prev => ({ ...prev, district: e.target.value }))} className="w-full border rounded-lg px-3 py-2 text-sm">
+              <select
+                value={registerForm.district}
+                onChange={e => setRegisterForm(prev => ({ ...prev, district: e.target.value }))}
+                className="w-full border rounded-lg px-3 py-2 text-sm"
+              >
                 <option value="">Select district</option>
                 {DISTRICTS.map(d => <option key={d} value={d}>{d}</option>)}
               </select>
             </div>
             <div>
               <label className="text-sm font-medium text-gray-700 mb-1 block">Capacity (Pax)</label>
-              <input type="number" value={registerForm.capacity} onChange={e => setRegisterForm(prev => ({ ...prev, capacity: e.target.value }))} placeholder="500" className="w-full border rounded-lg px-3 py-2 text-sm" />
+              <input
+                type="number"
+                value={registerForm.capacity}
+                onChange={e => setRegisterForm(prev => ({ ...prev, capacity: e.target.value }))}
+                placeholder="500"
+                className="w-full border rounded-lg px-3 py-2 text-sm"
+              />
+            </div>
+
+            {/* Latitude */}
+            <div>
+              <label className="text-sm font-medium text-gray-700 mb-1 block">
+                Latitude <span className="text-gray-400 font-normal">(optional)</span>
+              </label>
+              <input
+                type="number"
+                step="any"
+                value={registerForm.latitude}
+                onChange={e => setRegisterForm(prev => ({ ...prev, latitude: e.target.value }))}
+                placeholder="e.g. 6.9271"
+                className="w-full border rounded-lg px-3 py-2 text-sm"
+              />
+            </div>
+
+            {/* Longitude */}
+            <div>
+              <label className="text-sm font-medium text-gray-700 mb-1 block">
+                Longitude <span className="text-gray-400 font-normal">(optional)</span>
+              </label>
+              <input
+                type="number"
+                step="any"
+                value={registerForm.longitude}
+                onChange={e => setRegisterForm(prev => ({ ...prev, longitude: e.target.value }))}
+                placeholder="e.g. 79.8612"
+                className="w-full border rounded-lg px-3 py-2 text-sm"
+              />
             </div>
           </div>
+
+          {/* Use District Center button */}
+          <div className="mt-3 flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleUseDistrictCenter}
+              disabled={!registerForm.district}
+              className={cn(
+                'text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors',
+                registerForm.district
+                  ? 'border-gray-300 hover:bg-gray-100 text-gray-700'
+                  : 'border-gray-200 text-gray-400 cursor-not-allowed'
+              )}
+              title={registerForm.district ? `Use center coordinates for ${registerForm.district}` : 'Select a district first'}
+            >
+              📌 Use District Center
+              {registerForm.district && (
+                <span className="ml-1 text-gray-400">({registerForm.district})</span>
+              )}
+            </button>
+            {registerForm.latitude && registerForm.longitude && (
+              <span className="text-xs text-green-600 font-medium">
+                📍 {parseFloat(registerForm.latitude).toFixed(5)}, {parseFloat(registerForm.longitude).toFixed(5)}
+              </span>
+            )}
+          </div>
+
           <button
-            onClick={() => createMutation.mutate({ name: registerForm.name, address: registerForm.address, district: registerForm.district, capacity: parseInt(registerForm.capacity), amenities: [] })}
+            onClick={handleSubmitRegister}
             disabled={createMutation.isPending}
             className="mt-4 bg-gray-900 text-white font-semibold px-5 py-2.5 rounded-lg text-sm disabled:opacity-50"
           >

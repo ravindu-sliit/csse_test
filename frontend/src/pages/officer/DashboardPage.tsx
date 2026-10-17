@@ -1,15 +1,19 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { AlertTriangle, Bell, Home, Users } from 'lucide-react';
 import { fetchDashboardSummary, fetchWarnings } from '@/api/warnings.api';
+import { fetchShelters } from '@/api/shelters.api';
 import { StatCard } from '@/components/shared/StatCard';
 import { SeverityBadge } from '@/components/shared/SeverityBadge';
 import { LoadingSpinner } from '@/components/shared/LoadingSpinner';
 import { SriLankaMap } from '@/components/shared/SriLankaMap';
+import { cn } from '@/lib/utils';
 import type { SeverityLevel } from '@/types';
 
 export function DashboardPage() {
   const navigate = useNavigate();
+  const [mapLayer, setMapLayer] = useState<'hazards' | 'shelters' | 'teams'>('hazards');
 
   const { data: summary, isLoading: summaryLoading } = useQuery({
     queryKey: ['dashboard-summary'],
@@ -24,6 +28,12 @@ export function DashboardPage() {
 
   const activeWarnings = warningsData?.data || [];
 
+  const { data: sheltersData } = useQuery({
+    queryKey: ['shelters'],
+    queryFn: () => fetchShelters(),
+  });
+  const shelters = sheltersData?.data || [];
+
   // Create map pins from active warnings
   const districtCoords: Record<string, [number, number]> = {
     'Colombo': [6.9271, 79.8612], 'Gampaha': [7.0873, 79.9993], 'Kalutara': [6.5854, 80.0006],
@@ -36,14 +46,42 @@ export function DashboardPage() {
     'Mannar': [8.9810, 79.9044], 'Nuwara Eliya': [6.9497, 80.7891],
   };
 
-  const mapPins = activeWarnings.flatMap(w =>
-    w.targetDistricts.map(d => ({
-      id: `${w.id}-${d}`,
-      lat: districtCoords[d]?.[0] || 7.8731,
-      lng: districtCoords[d]?.[1] || 80.7718,
-      label: `${d} - ${w.hazardType.replace('_', ' ')} (${w.severityLevel})`,
-    }))
-  );
+  const getMapPins = () => {
+    if (mapLayer === 'shelters') {
+      // Only show shelters with real GPS coordinates
+      return shelters
+        .filter(s => s.latitude != null && s.longitude != null)
+        .map(s => ({
+          id: s.id,
+          lat: s.latitude!,
+          lng: s.longitude!,
+          label: `${s.name} (${s.currentOccupancy}/${s.capacity})`,
+        }));
+    }
+    if (mapLayer === 'teams') {
+      // For teams, we'd need team coordinates - for now return empty
+      return [];
+    }
+    // Default: hazards from active warnings
+    return activeWarnings.flatMap(w => {
+      // If warning has GPS coordinates, show a single pin at that location
+      if (w.latitude != null && w.longitude != null) {
+        return [{
+          id: w.id,
+          lat: w.latitude,
+          lng: w.longitude,
+          label: `${w.locationLabel || w.hazardType.replace('_', ' ')} - ${w.severityLevel}`,
+        }];
+      }
+      // Otherwise show pins for each target district
+      return w.targetDistricts.map(d => ({
+        id: `${w.id}-${d}`,
+        lat: districtCoords[d]?.[0] || 7.8731,
+        lng: districtCoords[d]?.[1] || 80.7718,
+        label: `${d} - ${w.hazardType.replace('_', ' ')} (${w.severityLevel})`,
+      }));
+    });
+  };
 
   if (summaryLoading) return <LoadingSpinner fullScreen />;
 
@@ -76,8 +114,32 @@ export function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
           <div className="bg-white rounded-xl border p-4">
-            <h2 className="font-semibold text-gray-800 mb-3">District Hazard Map</h2>
-            <SriLankaMap pins={mapPins} height="380px" />
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="font-semibold text-gray-800">
+                {mapLayer === 'hazards' ? 'District Hazard Map' : mapLayer === 'shelters' ? 'Shelter Locations' : 'Rescue Teams'}
+              </h2>
+              <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+                <button
+                  onClick={() => setMapLayer('hazards')}
+                  className={cn('px-3 py-1 text-xs font-medium rounded-md transition-colors', mapLayer === 'hazards' ? 'bg-white shadow text-red-600' : 'text-gray-500 hover:text-gray-700')}
+                >
+                  Hazards
+                </button>
+                <button
+                  onClick={() => setMapLayer('shelters')}
+                  className={cn('px-3 py-1 text-xs font-medium rounded-md transition-colors', mapLayer === 'shelters' ? 'bg-white shadow text-green-600' : 'text-gray-500 hover:text-gray-700')}
+                >
+                  Shelters
+                </button>
+                <button
+                  onClick={() => setMapLayer('teams')}
+                  className={cn('px-3 py-1 text-xs font-medium rounded-md transition-colors', mapLayer === 'teams' ? 'bg-white shadow text-blue-600' : 'text-gray-500 hover:text-gray-700')}
+                >
+                  Teams
+                </button>
+              </div>
+            </div>
+            <SriLankaMap pins={getMapPins()} height="380px" />
           </div>
         </div>
 

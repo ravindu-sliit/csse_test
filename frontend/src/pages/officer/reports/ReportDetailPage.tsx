@@ -172,6 +172,35 @@ export function ReportDetailPage() {
               <button onClick={() => setShowRejectDialog(false)} className="w-full border py-2 rounded-lg text-sm text-gray-500 hover:bg-gray-50">Cancel</button>
             </div>
           )}
+
+          {/* Create Warning from verified report */}
+          {report.status === 'verified' && (
+            <div className="mt-4 pt-4 border-t">
+              <p className="text-xs text-gray-400 uppercase mb-2">Quick Actions</p>
+              <button
+                type="button"
+                onClick={() =>
+                  navigate('/officer/warnings/create', {
+                    state: {
+                      fromReport: true,
+                      reportId: report.id,
+                      reportCode: report.reportCode,
+                      hazardType: report.hazardType.toUpperCase(),
+                      targetDistricts: [report.district],
+                      latitude: report.gpsLatitude,
+                      longitude: report.gpsLongitude,
+                      locationLabel: report.locationLabel || `Near ${report.district}`,
+                      severityLevel: report.severityEstimate?.toUpperCase() || 'WARNING',
+                    },
+                  })
+                }
+                className="w-full bg-amber-500 hover:bg-amber-600 text-white font-semibold py-2.5 rounded-lg text-sm transition-colors flex items-center justify-center gap-2"
+              >
+                <span>⚠️</span>
+                Create Warning from Report
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -154,6 +154,7 @@ model Hazard {
 
   warnings Warning[]
   reports  HazardReport[]
+  disasterReports DisasterReport[]
 
   @@map("hazards")
 }
@@ -168,6 +169,11 @@ model Warning {
   expiryTime       DateTime?
   targetDistricts  String[]
   targetRiverBasin String?
+  latitude         Float?
+  longitude        Float?
+  locationLabel    String?
+  sourceReportId   String?
+  sourceReport     HazardReport? @relation("WarningSource", fields: [sourceReportId], references: [id])
   status           WarningStatus @default(ACTIVE)
   issuedById       String
   hazardId         String?
@@ -239,6 +245,7 @@ model HazardReport {
   citizen    Citizen   @relation(fields: [citizenId], references: [id])
   verifiedBy User?     @relation("VerifiedBy", fields: [verifiedById], references: [id])
   hazard     Hazard?   @relation(fields: [hazardId], references: [id])
+  warningsCreated  Warning[] @relation("WarningSource")
 
   @@map("hazard_reports")
 }
@@ -247,6 +254,8 @@ model Shelter {
   id               String        @id @default(cuid())
   name             String
   address          String
+  latitude         Float?
+  longitude        Float?
   district         String
   capacity         Int
   currentOccupancy Int           @default(0)
@@ -378,12 +387,16 @@ model DisasterReport {
   resourceDistributed  Float?
   exportFormat         ReportExportFormat?
   fileUrl              String?
+  filePath             String?
+  categories           String[]
+  hazardId             String?
   createdAt            DateTime            @default(now())
   warningId            String?
   shelterId            String?
   rescueTeamId         String?
 
   generatedBy User        @relation(fields: [generatedById], references: [id])
+  hazard      Hazard?      @relation(fields: [hazardId], references: [id])
   warning     Warning?    @relation(fields: [warningId], references: [id])
   shelter     Shelter?    @relation(fields: [shelterId], references: [id])
   rescueTeam  RescueTeam? @relation(fields: [rescueTeamId], references: [id])

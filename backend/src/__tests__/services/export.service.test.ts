@@ -18,7 +18,15 @@ import * as fs from 'fs';
 import * as nodePath from 'path';
 import { mockPrisma, resetMockPrisma } from '../mocks/prisma.mock';
 import * as analyticsService from '../../services/analytics.service';
-import { generateReport, listReports } from '../../services/export.service';
+import {
+  generateReport,
+  listReports,
+  getCompletedEvents,
+  previewAnalyticsReport,
+  generateAnalyticsReport,
+  getReportFile,
+  deleteAnalyticsReport,
+} from '../../services/export.service';
 
 // ─── Typed mocks ─────────────────────────────────────────────────────────────
 
@@ -745,6 +753,329 @@ describe('exportService', () => {
 
       expect(findManyResolved).toBe(true);
       expect(countResolved).toBe(true);
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  getCompletedEvents
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  describe('getCompletedEvents()', () => {
+    const verifiedReport = {
+      id: 'rep-1',
+      hazardType: 'FLOOD',
+      description: 'Flooding in Colombo',
+      district: 'Colombo',
+      locationLabel: 'Colombo North',
+      submittedAt: new Date('2026-09-01'),
+      reviewedAt: new Date('2026-09-02'),
+      severityEstimate: 'WARNING',
+    };
+
+    const createdHazard = {
+      id: 'hazard-1',
+      type: 'FLOOD',
+      description: 'Flooding in Colombo',
+      severity: 'WARNING',
+      location: 'Colombo North',
+      district: 'Colombo',
+      startTime: new Date('2026-09-01'),
+      endTime: new Date('2026-09-02'),
+      status: 'RESOLVED',
+    };
+
+    it('creates a hazard for each verified report without a hazardId', async () => {
+      (mockPrisma.hazardReport.findMany as jest.Mock).mockResolvedValue([verifiedReport]);
+      (mockPrisma.hazard.create as jest.Mock).mockResolvedValue(createdHazard);
+      (mockPrisma.hazardReport.update as jest.Mock).mockResolvedValue({});
+      (mockPrisma.hazard.findMany as jest.Mock).mockResolvedValue([createdHazard]);
+
+      await getCompletedEvents();
+
+      expect(mockPrisma.hazard.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ type: 'FLOOD', district: 'Colombo', status: 'RESOLVED' }),
+        }),
+      );
+    });
+
+    it('links the created hazard back to the report', async () => {
+      (mockPrisma.hazardReport.findMany as jest.Mock).mockResolvedValue([verifiedReport]);
+      (mockPrisma.hazard.create as jest.Mock).mockResolvedValue(createdHazard);
+      (mockPrisma.hazardReport.update as jest.Mock).mockResolvedValue({});
+      (mockPrisma.hazard.findMany as jest.Mock).mockResolvedValue([createdHazard]);
+
+      await getCompletedEvents();
+
+      expect(mockPrisma.hazardReport.update).toHaveBeenCalledWith({
+        where: { id: 'rep-1' },
+        data: { hazardId: 'hazard-1' },
+      });
+    });
+
+    it('returns all resolved hazards ordered by endTime desc', async () => {
+      (mockPrisma.hazardReport.findMany as jest.Mock).mockResolvedValue([]);
+      (mockPrisma.hazard.findMany as jest.Mock).mockResolvedValue([createdHazard]);
+
+      const result = await getCompletedEvents();
+
+      expect(mockPrisma.hazard.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ orderBy: { endTime: 'desc' } }),
+      );
+      expect(result).toEqual([createdHazard]);
+    });
+
+    it('uses district as location fallback when locationLabel is null', async () => {
+      (mockPrisma.hazardReport.findMany as jest.Mock).mockResolvedValue([{ ...verifiedReport, locationLabel: null }]);
+      (mockPrisma.hazard.create as jest.Mock).mockResolvedValue(createdHazard);
+      (mockPrisma.hazardReport.update as jest.Mock).mockResolvedValue({});
+      (mockPrisma.hazard.findMany as jest.Mock).mockResolvedValue([createdHazard]);
+
+      await getCompletedEvents();
+
+      expect(mockPrisma.hazard.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ location: 'Colombo' }) }),
+      );
+    });
+
+    it('uses WATCH as severity fallback when severityEstimate is null', async () => {
+      (mockPrisma.hazardReport.findMany as jest.Mock).mockResolvedValue([{ ...verifiedReport, severityEstimate: null }]);
+      (mockPrisma.hazard.create as jest.Mock).mockResolvedValue(createdHazard);
+      (mockPrisma.hazardReport.update as jest.Mock).mockResolvedValue({});
+      (mockPrisma.hazard.findMany as jest.Mock).mockResolvedValue([createdHazard]);
+
+      await getCompletedEvents();
+
+      expect(mockPrisma.hazard.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ severity: 'WATCH' }) }),
+      );
+    });
+
+    it('does not call hazard.create when no verified reports exist', async () => {
+      (mockPrisma.hazardReport.findMany as jest.Mock).mockResolvedValue([]);
+      (mockPrisma.hazard.findMany as jest.Mock).mockResolvedValue([]);
+
+      await getCompletedEvents();
+
+      expect(mockPrisma.hazard.create).not.toHaveBeenCalled();
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  previewAnalyticsReport
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  describe('previewAnalyticsReport()', () => {
+    const validFilters = {
+      eventId: 'event-1',
+      districts: ['Colombo'],
+      startDate: '2026-09-01',
+      endDate: '2026-09-30',
+      categories: ['Alerts'] as any,
+    };
+
+    const mockHazard = {
+      id: 'event-1',
+      description: 'Test flood event',
+      type: 'FLOOD',
+      startTime: new Date('2026-09-01'),
+      endTime: new Date('2026-09-30'),
+    };
+
+    beforeEach(() => {
+      (mockPrisma.warning.findMany as jest.Mock).mockResolvedValue([
+        { id: 'w-1', warningCode: 'DMC-001', hazardType: 'FLOOD', severityLevel: 'WARNING', targetDistricts: ['Colombo'], issuedTime: new Date() },
+      ]);
+      (mockPrisma.notificationLog.findMany as jest.Mock).mockResolvedValue([]);
+      (mockPrisma.shelter.findMany as jest.Mock).mockResolvedValue([]);
+      (mockPrisma.supplyDispatch.findMany as jest.Mock).mockResolvedValue([]);
+      (mockPrisma.hazard.findFirst as jest.Mock).mockResolvedValue(mockHazard);
+    });
+
+    it('returns event, kpis, and category rows', async () => {
+      const result = await previewAnalyticsReport(validFilters);
+      expect(result.event).toEqual(mockHazard);
+      expect(result.kpis).toBeDefined();
+      expect(result.categories).toBeInstanceOf(Array);
+    });
+
+    it('throws INVALID_FILTERS when eventId is missing', async () => {
+      await expect(previewAnalyticsReport({ ...validFilters, eventId: '' }))
+        .rejects.toMatchObject({ code: 'INVALID_FILTERS' });
+    });
+
+    it('throws INVALID_FILTERS when districts array is empty', async () => {
+      await expect(previewAnalyticsReport({ ...validFilters, districts: [] }))
+        .rejects.toMatchObject({ code: 'INVALID_FILTERS' });
+    });
+
+    it('throws INVALID_DATE_RANGE when endDate is before startDate', async () => {
+      await expect(previewAnalyticsReport({ ...validFilters, startDate: '2026-09-30', endDate: '2026-09-01' }))
+        .rejects.toMatchObject({ code: 'INVALID_DATE_RANGE' });
+    });
+
+    it('throws INVALID_DATE_RANGE when dates are equal', async () => {
+      await expect(previewAnalyticsReport({ ...validFilters, startDate: '2026-09-01', endDate: '2026-09-01' }))
+        .rejects.toMatchObject({ code: 'INVALID_DATE_RANGE' });
+    });
+
+    it('throws INVALID_CATEGORY when an unknown category is provided', async () => {
+      await expect(previewAnalyticsReport({ ...validFilters, categories: ['InvalidCat'] as any }))
+        .rejects.toMatchObject({ code: 'INVALID_CATEGORY' });
+    });
+
+    it('throws EVENT_NOT_FOUND when hazard does not exist', async () => {
+      (mockPrisma.hazard.findFirst as jest.Mock).mockResolvedValue(null);
+      await expect(previewAnalyticsReport(validFilters)).rejects.toMatchObject({ code: 'EVENT_NOT_FOUND' });
+    });
+
+    it('sets hasData to true when rows exist', async () => {
+      const result = await previewAnalyticsReport(validFilters);
+      expect(result.hasData).toBe(true);
+    });
+
+    it('sets hasData to false when no rows and all kpis are zero', async () => {
+      (mockPrisma.warning.findMany as jest.Mock).mockResolvedValue([]);
+      const result = await previewAnalyticsReport(validFilters);
+      expect(result.hasData).toBe(false);
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  generateAnalyticsReport
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  describe('generateAnalyticsReport()', () => {
+    const validFilters = {
+      eventId: 'event-1',
+      districts: ['Colombo'],
+      startDate: '2026-09-01',
+      endDate: '2026-09-30',
+      categories: ['Alerts'] as any,
+    };
+
+    const mockHazard = {
+      id: 'event-1',
+      description: 'Test flood',
+      type: 'FLOOD',
+      startTime: new Date('2026-09-01'),
+      endTime: new Date('2026-09-30'),
+    };
+
+    const mockReport = {
+      id: 'report-analytics-1',
+      fileUrl: '/api/analytics/reports/report-analytics-1/download',
+      reportTitle: 'Disaster Analysis - Test flood',
+      filePath: '/tmp/test.csv',
+      exportFormat: 'CSV',
+    };
+
+    beforeEach(() => {
+      (mockPrisma.warning.findMany as jest.Mock).mockResolvedValue([
+        { id: 'w-1', warningCode: 'DMC-001', hazardType: 'FLOOD', severityLevel: 'WARNING', targetDistricts: ['Colombo'], issuedTime: new Date() },
+      ]);
+      (mockPrisma.notificationLog.findMany as jest.Mock).mockResolvedValue([]);
+      (mockPrisma.shelter.findMany as jest.Mock).mockResolvedValue([]);
+      (mockPrisma.supplyDispatch.findMany as jest.Mock).mockResolvedValue([]);
+      (mockPrisma.hazard.findFirst as jest.Mock).mockResolvedValue(mockHazard);
+      (mockPrisma.disasterReport.create as jest.Mock).mockResolvedValue(mockReport);
+      (mockPrisma.disasterReport.update as jest.Mock).mockResolvedValue(mockReport);
+      (mockFs.existsSync as jest.Mock).mockReturnValue(true);
+      (mockFs.writeFileSync as jest.Mock).mockReturnValue(undefined);
+      (mockPath.resolve as jest.Mock).mockReturnValue('/tmp/test.csv');
+    });
+
+    it('generates a CSV report and returns reportId and fileUrl', async () => {
+      const result = await generateAnalyticsReport(validFilters, 'CSV', OFFICER_ID);
+      expect(result.reportId).toBe('report-analytics-1');
+      expect(result.fileUrl).toBeDefined();
+    });
+
+    it('generates a PDF report without throwing', async () => {
+      await expect(generateAnalyticsReport(validFilters, 'PDF', OFFICER_ID)).resolves.toBeDefined();
+    });
+
+    it('writes a file to the upload directory', async () => {
+      await generateAnalyticsReport(validFilters, 'CSV', OFFICER_ID);
+      expect(mockFs.writeFileSync).toHaveBeenCalledTimes(1);
+    });
+
+    it('creates the upload directory when it does not exist', async () => {
+      (mockFs.existsSync as jest.Mock).mockReturnValue(false);
+      (mockFs.mkdirSync as jest.Mock).mockReturnValue(undefined);
+      await generateAnalyticsReport(validFilters, 'CSV', OFFICER_ID);
+      expect(mockFs.mkdirSync).toHaveBeenCalledWith(expect.any(String), { recursive: true });
+    });
+
+    it('creates a disasterReport record in the database', async () => {
+      await generateAnalyticsReport(validFilters, 'CSV', OFFICER_ID);
+      expect(mockPrisma.disasterReport.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('updates the fileUrl after creating the report', async () => {
+      await generateAnalyticsReport(validFilters, 'CSV', OFFICER_ID);
+      expect(mockPrisma.disasterReport.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: mockReport.id },
+          data: expect.objectContaining({ fileUrl: expect.stringContaining(mockReport.id) }),
+        }),
+      );
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  getReportFile
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  describe('getReportFile()', () => {
+    it('returns the report file metadata when found', async () => {
+      const mockFile = { filePath: '/uploads/report.csv', reportTitle: 'Test', exportFormat: 'CSV' };
+      (mockPrisma.disasterReport.findUnique as jest.Mock).mockResolvedValue(mockFile);
+      const result = await getReportFile('report-1');
+      expect(result).toEqual(mockFile);
+    });
+
+    it('throws REPORT_NOT_FOUND when report does not exist', async () => {
+      (mockPrisma.disasterReport.findUnique as jest.Mock).mockResolvedValue(null);
+      await expect(getReportFile('bad-id')).rejects.toMatchObject({ code: 'REPORT_NOT_FOUND' });
+    });
+
+    it('throws REPORT_NOT_FOUND when filePath is null', async () => {
+      (mockPrisma.disasterReport.findUnique as jest.Mock).mockResolvedValue(
+        { filePath: null, reportTitle: 'Test', exportFormat: 'CSV' },
+      );
+      await expect(getReportFile('report-1')).rejects.toMatchObject({ code: 'REPORT_NOT_FOUND' });
+    });
+  });
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  deleteAnalyticsReport
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  describe('deleteAnalyticsReport()', () => {
+    it('deletes the database record and returns the id', async () => {
+      (mockPrisma.disasterReport.findUnique as jest.Mock).mockResolvedValue({ id: 'report-1', filePath: null });
+      (mockPrisma.disasterReport.delete as jest.Mock).mockResolvedValue({});
+      const result = await deleteAnalyticsReport('report-1');
+      expect(mockPrisma.disasterReport.delete).toHaveBeenCalledWith({ where: { id: 'report-1' } });
+      expect(result).toEqual({ id: 'report-1' });
+    });
+
+    it('throws REPORT_NOT_FOUND when the report does not exist', async () => {
+      (mockPrisma.disasterReport.findUnique as jest.Mock).mockResolvedValue(null);
+      await expect(deleteAnalyticsReport('bad-id')).rejects.toMatchObject({ code: 'REPORT_NOT_FOUND' });
+    });
+
+    it('resolves successfully when filePath is present', async () => {
+      (mockPrisma.disasterReport.findUnique as jest.Mock).mockResolvedValue({ id: 'report-1', filePath: '/uploads/report.csv' });
+      (mockPrisma.disasterReport.delete as jest.Mock).mockResolvedValue({});
+      await expect(deleteAnalyticsReport('report-1')).resolves.toEqual({ id: 'report-1' });
+    });
+
+    it('does not throw when filePath is null', async () => {
+      (mockPrisma.disasterReport.findUnique as jest.Mock).mockResolvedValue({ id: 'report-1', filePath: null });
+      (mockPrisma.disasterReport.delete as jest.Mock).mockResolvedValue({});
+      await expect(deleteAnalyticsReport('report-1')).resolves.toEqual({ id: 'report-1' });
     });
   });
 });

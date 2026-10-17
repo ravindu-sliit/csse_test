@@ -8,6 +8,7 @@ export interface Toast {
   id: string;
   type: ToastType;
   message: string;
+  action?: { label: string; onClick: () => void };
 }
 
 interface ToastProps {
@@ -34,6 +35,7 @@ export function ToastItem({ toast, onDismiss }: ToastProps) {
     <div className={cn('flex items-start gap-3 p-3 rounded-lg border shadow-sm max-w-sm w-full', COLOURS[toast.type])}>
       <Icon className="w-4 h-4 flex-shrink-0 mt-0.5" />
       <p className="text-sm flex-1">{toast.message}</p>
+      {toast.action && <button onClick={toast.action.onClick} className="text-sm font-semibold underline">{toast.action.label}</button>}
       <button onClick={() => onDismiss(toast.id)} className="flex-shrink-0 opacity-60 hover:opacity-100">
         <X className="w-4 h-4" />
       </button>

@@ -15,3 +15,5 @@ docs/assignment 2/
 
 # Simulation script
 simulate_history.ps1
+.kiro/
+frontend/.vite/

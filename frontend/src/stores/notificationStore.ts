@@ -3,14 +3,14 @@ import type { Toast, ToastType } from '@/components/shared/Toast';
 
 interface NotificationState {
   toasts: Toast[];
-  addToast: (message: string, type?: ToastType) => void;
+  addToast: (message: string, type?: ToastType, action?: Toast['action']) => void;
   dismissToast: (id: string) => void;
 }
 
 export const useNotificationStore = create<NotificationState>((set) => ({
   toasts: [],
-  addToast: (message, type = 'info') =>
-    set(state => ({ toasts: [...state.toasts, { id: Date.now().toString(), type, message }] })),
+  addToast: (message, type = 'info', action) =>
+    set(state => ({ toasts: [...state.toasts, { id: Date.now().toString(), type, message, action }] })),
   dismissToast: (id) =>
     set(state => ({ toasts: state.toasts.filter(t => t.id !== id) })),
 }));
